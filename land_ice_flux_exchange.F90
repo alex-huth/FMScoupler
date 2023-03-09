@@ -104,13 +104,14 @@ contains
   !!        discharge --> runoff (kg/m2)
   !!        discharge_snow --> calving (kg/m2)
   !! </pre>
-  subroutine flux_land_to_ice( Time, Land, Ice, Land_Ice_Boundary )
+  subroutine flux_land_to_ice( Time, Land, Ice, Land_Ice_Boundary, calve_ice_shelf_bergs )
     type(time_type),                intent(in) :: Time !< Current time
     type(land_data_type),           intent(in) :: Land !< A derived data type to specify land boundary data
     type(ice_data_type),            intent(in) :: Ice !< A derived data type to specify ice boundary data
     !real, dimension(:,:),         intent(out) :: runoff_ice, calving_ice
     type(land_ice_boundary_type), intent(inout):: Land_Ice_Boundary !< A derived data type to specify properties and fluxes passed
                                                                     !! from land to ice
+    logical, intent(in) :: calve_ice_shelf_bergs !< If true, bergs calve from ice shelf, not frozen flux from land
 
     integer                         :: ier
     real, dimension(n_xgrid_runoff) :: ex_runoff, ex_calving, ex_runoff_hflx, ex_calving_hflx
@@ -138,9 +139,11 @@ contains
        Land_Ice_Boundary%calving_hflx = ice_buf(:,:,1);
        !Balaji
        call data_override('ICE', 'runoff' , Land_Ice_Boundary%runoff , Time)
-       call data_override('ICE', 'calving', Land_Ice_Boundary%calving, Time)
        call data_override('ICE', 'runoff_hflx' , Land_Ice_Boundary%runoff_hflx , Time)
-       call data_override('ICE', 'calving_hflx', Land_Ice_Boundary%calving_hflx, Time)
+       if (.not. calve_ice_shelf_bergs) then
+         call data_override('ICE', 'calving', Land_Ice_Boundary%calving, Time)
+         call data_override('ICE', 'calving_hflx', Land_Ice_Boundary%calving_hflx, Time)
+       endif
 
        ! compute stock increment
        ice_buf(:,:,1) = Land_Ice_Boundary%runoff + Land_Ice_Boundary%calving

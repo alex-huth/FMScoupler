@@ -99,6 +99,9 @@ contains
     !frazil and sea_level are optional, if not present they should be nullified
     allocate( ocean_ice_boundary%frazil(is:ie,js:je) )
     allocate( ocean_ice_boundary%sea_level(is:ie,js:je) )
+    allocate( ocean_ice_boundary%calving(is:ie,js:je) )
+    allocate( ocean_ice_boundary%calving_hflx(is:ie,js:je) )
+    allocate( ocean_ice_boundary%IS_mask(is:ie,js:je) )
     ! initialize boundary fields for override experiments (mjh)
     ocean_ice_boundary%u=0.0
     ocean_ice_boundary%v=0.0
@@ -106,6 +109,9 @@ contains
     ocean_ice_boundary%s=0.0
     ocean_ice_boundary%frazil=0.0
     ocean_ice_boundary%sea_level=0.0
+    ocean_ice_boundary%calving=0.0
+    ocean_ice_boundary%calving_hflx=0.0
+    ocean_ice_boundary%IS_mask=0.0
 
     ! allocate fields for extra tracers in ocean_ice_boundary
     if (.not.coupler_type_initialized(ocean_ice_boundary%fields)) &
@@ -410,12 +416,32 @@ contains
        if( ASSOCIATED(Ocean_Ice_Boundary%t) )Ocean_Ice_Boundary%t = Ocean%t_surf
        if( ASSOCIATED(Ocean_Ice_Boundary%s) )Ocean_Ice_Boundary%s = Ocean%s_surf
        if( ASSOCIATED(Ocean_Ice_Boundary%sea_level) )Ocean_Ice_Boundary%sea_level = Ocean%sea_lev
+       if( ASSOCIATED(Ocean_Ice_Boundary%IS_mask) ) then
+          Ocean_Ice_Boundary%IS_mask = Ocean%IS_mask-1
+          where (Ocean_Ice_Boundary%IS_mask.ne.0.) Ocean_Ice_Boundary%IS_mask=1.
+       endif
        if( ASSOCIATED(Ocean_Ice_Boundary%frazil) ) then
           if(do_area_weighted_flux) then
              Ocean_Ice_Boundary%frazil = Ocean%frazil * Ocean%area
              call divide_by_area(data=Ocean_Ice_Boundary%frazil, area=Ice%area)
           else
              Ocean_Ice_Boundary%frazil = Ocean%frazil
+          endif
+       endif
+       if( ASSOCIATED(Ocean_Ice_Boundary%calving) ) then
+          if(do_area_weighted_flux) then
+             Ocean_Ice_Boundary%calving = Ocean%calving * Ocean%area
+             call divide_by_area(data=Ocean_Ice_Boundary%calving, area=Ice%area)
+           else
+             Ocean_Ice_Boundary%calving = Ocean%calving
+          endif
+       endif
+       if( ASSOCIATED(Ocean_Ice_Boundary%calving_hflx) ) then
+          if(do_area_weighted_flux) then
+             Ocean_Ice_Boundary%calving_hflx = Ocean%calving_hflx * Ocean%area
+             call divide_by_area(data=Ocean_Ice_Boundary%calving_hflx, area=Ice%area)
+          else
+             Ocean_Ice_Boundary%calving_hflx = Ocean%calving_hflx
           endif
        endif
 
@@ -435,6 +461,11 @@ contains
 
        if( ASSOCIATED(Ocean_Ice_Boundary%sea_level) )             &
             call mpp_redistribute(Ocean%Domain, Ocean%sea_lev, Ice%slow_Domain_NH, Ocean_Ice_Boundary%sea_level)
+       if( ASSOCIATED(Ocean_Ice_Boundary%IS_mask) ) then
+            call mpp_redistribute(Ocean%Domain, Ocean%IS_mask, Ice%slow_Domain_NH, Ocean_Ice_Boundary%IS_mask)
+            Ocean_Ice_Boundary%IS_mask=Ocean_Ice_Boundary%IS_mask-1
+            where (Ocean_Ice_Boundary%IS_mask.ne.0.) Ocean_Ice_Boundary%IS_mask=1.
+       endif
 
        if( ASSOCIATED(Ocean_Ice_Boundary%frazil) ) then
           if(do_area_weighted_flux) then
@@ -448,6 +479,35 @@ contains
              if (Ocean%is_ocean_pe) deallocate(tmp)
           else
              call mpp_redistribute(Ocean%Domain, Ocean%frazil, Ice%slow_Domain_NH, Ocean_Ice_Boundary%frazil)
+          endif
+       endif
+
+       if( ASSOCIATED(Ocean_Ice_Boundary%calving) ) then
+          if(do_area_weighted_flux) then
+             if (Ocean%is_ocean_pe) then
+               allocate(tmp(size(Ocean%area,1), size(Ocean%area,2)))
+               tmp(:,:) = Ocean%calving(:,:) * Ocean%area(:,:)
+             endif
+             call mpp_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving)
+             if (Ice%slow_ice_pe) &
+               call divide_by_area(data=Ocean_Ice_Boundary%calving, area=Ice%area)
+             if (Ocean%is_ocean_pe) deallocate(tmp)
+          else
+             call mpp_redistribute(Ocean%Domain, Ocean%calving, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving)
+          endif
+       endif
+       if( ASSOCIATED(Ocean_Ice_Boundary%calving_hflx) ) then
+          if(do_area_weighted_flux) then
+             if (Ocean%is_ocean_pe) then
+               allocate(tmp(size(Ocean%area,1), size(Ocean%area,2)))
+               tmp(:,:) = Ocean%calving_hflx(:,:) * Ocean%area(:,:)
+             endif
+             call mpp_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving_hflx)
+             if (Ice%slow_ice_pe) &
+               call divide_by_area(data=Ocean_Ice_Boundary%calving_hflx, area=Ice%area)
+             if (Ocean%is_ocean_pe) deallocate(tmp)
+          else
+             call mpp_redistribute(Ocean%Domain, Ocean%calving_hflx, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving_hflx)
           endif
        endif
 
@@ -480,6 +540,8 @@ contains
     call data_override('ICE', 's',         Ocean_Ice_Boundary%s,         Time)
     call data_override('ICE', 'frazil',    Ocean_Ice_Boundary%frazil,    Time)
     call data_override('ICE', 'sea_level', Ocean_Ice_Boundary%sea_level, Time)
+    call data_override('ICE', 'calving',      Ocean_Ice_Boundary%calving,      Time)
+    call data_override('ICE', 'calving_hflx', Ocean_Ice_Boundary%calving_hflx, Time)
     call coupler_type_data_override('ICE', Ocean_Ice_Boundary%fields, Time)
 
     !  Perform diagnostic output for the ocean_ice_boundary fields
