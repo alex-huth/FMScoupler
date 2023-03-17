@@ -139,6 +139,7 @@ contains
     allocate( ice_ocean_boundary%sw_flux_nir_dif  (is:ie,js:je) ) ; ice_ocean_boundary%sw_flux_nir_dif = 0.0
     allocate( ice_ocean_boundary%lprec    (is:ie,js:je) ) ;         ice_ocean_boundary%lprec = 0.0
     allocate( ice_ocean_boundary%fprec    (is:ie,js:je) ) ;         ice_ocean_boundary%fprec = 0.0
+    allocate( ice_ocean_boundary%fprec_IS    (is:ie,js:je) ) ;      ice_ocean_boundary%fprec_IS = 0.0
     allocate( ice_ocean_boundary%runoff   (is:ie,js:je) ) ;         ice_ocean_boundary%runoff = 0.0
     allocate( ice_ocean_boundary%calving  (is:ie,js:je) ) ;         ice_ocean_boundary%calving = 0.0
     allocate( ice_ocean_boundary%runoff_hflx   (is:ie,js:je) ) ;    ice_ocean_boundary%runoff_hflx = 0.0
@@ -294,6 +295,9 @@ contains
     if(ASSOCIATED(Ice_Ocean_Boundary%fprec) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%fprec, Ice_Ocean_Boundary%fprec, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
+    if(ASSOCIATED(Ice_Ocean_Boundary%fprec_IS) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+         Ice%fprec_IS, Ice_Ocean_Boundary%fprec_IS, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
     if(ASSOCIATED(Ice_Ocean_Boundary%runoff) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%runoff, Ice_Ocean_Boundary%runoff, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
@@ -344,6 +348,7 @@ contains
     call data_override('OCN', 'sw_flux_vis_dif', Ice_Ocean_Boundary%sw_flux_vis_dif, Time )
     call data_override('OCN', 'lprec',     Ice_Ocean_Boundary%lprec    , Time )
     call data_override('OCN', 'fprec',     Ice_Ocean_Boundary%fprec    , Time )
+    call data_override('OCN', 'fprec_IS',     Ice_Ocean_Boundary%fprec_IS    , Time )
     call data_override('OCN', 'runoff',    Ice_Ocean_Boundary%runoff   , Time )
     call data_override('OCN', 'calving',   Ice_Ocean_Boundary%calving  , Time )
     call data_override('OCN', 'runoff_hflx',    Ice_Ocean_Boundary%runoff_hflx   , Time )

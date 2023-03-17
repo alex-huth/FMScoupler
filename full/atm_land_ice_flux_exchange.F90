@@ -504,11 +504,13 @@ contains
     allocate( atmos_ice_boundary%sw_down_nir_dif(is:ie,js:je,kd) )
     allocate( atmos_ice_boundary%lprec(is:ie,js:je,kd) )
     allocate( atmos_ice_boundary%fprec(is:ie,js:je,kd) )
+    allocate( atmos_ice_boundary%fprec(is:ie,js:je,kd) )
     allocate( atmos_ice_boundary%dhdt(is:ie,js:je,kd) )
     allocate( atmos_ice_boundary%dedt(is:ie,js:je,kd) )
     allocate( atmos_ice_boundary%drdt(is:ie,js:je,kd) )
     allocate( atmos_ice_boundary%coszen(is:ie,js:je,kd) )
     allocate( atmos_ice_boundary%p(is:ie,js:je,kd) )
+    allocate( atmos_ice_boundary%fprec_IS(is:ie,js:je) )
     ! initialize boundary values for override experiments (mjh)
     atmos_ice_boundary%u_flux=0.0
     atmos_ice_boundary%v_flux=0.0
@@ -531,6 +533,7 @@ contains
     atmos_ice_boundary%drdt=0.0
     atmos_ice_boundary%coszen=0.0
     atmos_ice_boundary%p=0.0
+    atmos_ice_boundary%fprec_IS=0.0
 
     !         allocate fields for extra fluxes
     ! Copying initialized gas fluxes from exchange grid to atmosphere_ice boundary
@@ -2480,6 +2483,7 @@ contains
 
     call get_from_xgrid (Ice_boundary%lprec,    'OCN', ex_lprec,     xmap_sfc)
     call get_from_xgrid (Ice_boundary%fprec,    'OCN', ex_fprec,     xmap_sfc)
+
 !!$  if (do_area_weighted_flux) then
 !!$     where (AREA_ATM_SPHERE /= 0)
 !!$        Ice_boundary%lprec = Ice_boundary%lprec * AREA_ATM_MODEL/AREA_ATM_SPHERE
@@ -2535,6 +2539,7 @@ contains
     endif
     call data_override('ICE', 'lprec',  Ice_boundary%lprec,   Time)
     call data_override('ICE', 'fprec',  Ice_boundary%fprec,   Time)
+    call data_override('ICE', 'fprec_IS',  Ice_boundary%fprec_IS,   Time)
     call data_override('ICE', 'dhdt',   Ice_boundary%dhdt,    Time)
     call data_override('ICE', 'dedt',   Ice_boundary%dedt,    Time)
     call data_override('ICE', 'drdt',   Ice_boundary%drdt,    Time)

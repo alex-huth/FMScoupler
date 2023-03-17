@@ -765,6 +765,8 @@ program coupler_main
       endif
     endif
 
+    if (Ice%pe) Ice%fprec_IS=0.
+
     if (Atm%pe) then
       if (.NOT.(do_ice .and. Ice%pe) .OR. (ice_npes .NE. atmos_npes)) &
          call mpp_set_current_pelist(Atm%pelist)
@@ -890,6 +892,7 @@ program coupler_main
           if (do_chksum) call atmos_ice_land_chksum('update_ice_fast+', (nc-1)*num_atmos_calls+na, Atm, Land, Ice, &
                  Land_ice_atmos_boundary, Atmos_ice_boundary, Atmos_land_boundary)
           if (do_debug)  call print_memuse_stats( 'update ice')
+          if (Ice%fast_ice_pe) Ice%fprec_IS=Ice%fprec_IS+Atmos_ice_boundary%fprec_IS
 
           !      --------------------------------------------------------------
           !      ---- atmosphere up ----
@@ -990,6 +993,8 @@ program coupler_main
                                         !ATM clock is used for load-balancing the coupled models
     endif
     if (do_ice .and. Ice%pe) then
+
+      Ice%fprec_IS=Ice%fprec_IS*Ice%fCS%US%kg_m2s_to_RZ_T/num_atmos_calls
 
       if (Ice%fast_ice_PE) then
            if (ice_npes .NE. atmos_npes) call mpp_set_current_pelist(Ice%fast_pelist)
