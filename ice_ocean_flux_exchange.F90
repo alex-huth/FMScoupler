@@ -99,6 +99,7 @@ contains
     !frazil and sea_level are optional, if not present they should be nullified
     allocate( ocean_ice_boundary%frazil(is:ie,js:je) )
     allocate( ocean_ice_boundary%sea_level(is:ie,js:je) )
+    allocate( ocean_ice_boundary%ish(is:ie,js:je) )
     ! initialize boundary fields for override experiments (mjh)
     ocean_ice_boundary%u=0.0
     ocean_ice_boundary%v=0.0
@@ -106,6 +107,7 @@ contains
     ocean_ice_boundary%s=0.0
     ocean_ice_boundary%frazil=0.0
     ocean_ice_boundary%sea_level=0.0
+    ocean_ice_boundary%ish=0.0
 
     ! allocate fields for extra tracers in ocean_ice_boundary
     if (.not.coupler_type_initialized(ocean_ice_boundary%fields)) &
@@ -410,6 +412,7 @@ contains
        if( ASSOCIATED(Ocean_Ice_Boundary%t) )Ocean_Ice_Boundary%t = Ocean%t_surf
        if( ASSOCIATED(Ocean_Ice_Boundary%s) )Ocean_Ice_Boundary%s = Ocean%s_surf
        if( ASSOCIATED(Ocean_Ice_Boundary%sea_level) )Ocean_Ice_Boundary%sea_level = Ocean%sea_lev
+       if( ASSOCIATED(Ocean_Ice_Boundary%ish) )Ocean_Ice_Boundary%ish = Ocean%ish
        if( ASSOCIATED(Ocean_Ice_Boundary%frazil) ) then
           if(do_area_weighted_flux) then
              Ocean_Ice_Boundary%frazil = Ocean%frazil * Ocean%area
@@ -435,6 +438,9 @@ contains
 
        if( ASSOCIATED(Ocean_Ice_Boundary%sea_level) )             &
             call mpp_redistribute(Ocean%Domain, Ocean%sea_lev, Ice%slow_Domain_NH, Ocean_Ice_Boundary%sea_level)
+
+       if( ASSOCIATED(Ocean_Ice_Boundary%ish) )             &
+            call mpp_redistribute(Ocean%Domain, Ocean%ish, Ice%slow_Domain_NH, Ocean_Ice_Boundary%ish)
 
        if( ASSOCIATED(Ocean_Ice_Boundary%frazil) ) then
           if(do_area_weighted_flux) then
