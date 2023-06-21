@@ -136,10 +136,8 @@ contains
        !Balaji
        call data_override('ICE', 'runoff' , Land_Ice_Boundary%runoff , Time)
        call data_override('ICE', 'runoff_hflx' , Land_Ice_Boundary%runoff_hflx , Time)
-       if (.not. calve_ice_shelf_bergs) then
-         call data_override('ICE', 'calving', Land_Ice_Boundary%calving, Time)
-         call data_override('ICE', 'calving_hflx', Land_Ice_Boundary%calving_hflx, Time)
-       endif
+       call data_override('ICE', 'calving', Land_Ice_Boundary%calving, Time)
+       call data_override('ICE', 'calving_hflx', Land_Ice_Boundary%calving_hflx, Time)
 
        ! compute stock increment
        ice_buf(:,:,1) = Land_Ice_Boundary%runoff + Land_Ice_Boundary%calving
