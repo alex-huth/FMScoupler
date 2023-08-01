@@ -410,10 +410,8 @@ contains
        if( ASSOCIATED(Ocean_Ice_Boundary%t) )Ocean_Ice_Boundary%t = Ocean%t_surf
        if( ASSOCIATED(Ocean_Ice_Boundary%s) )Ocean_Ice_Boundary%s = Ocean%s_surf
        if( ASSOCIATED(Ocean_Ice_Boundary%sea_level) )Ocean_Ice_Boundary%sea_level = Ocean%sea_lev
-       if( ASSOCIATED(Ocean_Ice_Boundary%IS_mask) ) then
-          Ocean_Ice_Boundary%IS_mask = Ocean%IS_mask-1
-          where (Ocean_Ice_Boundary%IS_mask.ne.0.) Ocean_Ice_Boundary%IS_mask=1.
-       endif
+       if( ASSOCIATED(Ocean_Ice_Boundary%IS_mask) ) Ocean_Ice_Boundary%IS_mask = Ocean%IS_mask
+
        if( ASSOCIATED(Ocean_Ice_Boundary%frazil) ) then
           if(do_area_weighted_flux) then
              Ocean_Ice_Boundary%frazil = Ocean%frazil * Ocean%area
@@ -455,11 +453,8 @@ contains
 
        if( ASSOCIATED(Ocean_Ice_Boundary%sea_level) )             &
             call mpp_redistribute(Ocean%Domain, Ocean%sea_lev, Ice%slow_Domain_NH, Ocean_Ice_Boundary%sea_level)
-       if( ASSOCIATED(Ocean_Ice_Boundary%IS_mask) ) then
+       if( ASSOCIATED(Ocean_Ice_Boundary%IS_mask) )               &
             call mpp_redistribute(Ocean%Domain, Ocean%IS_mask, Ice%slow_Domain_NH, Ocean_Ice_Boundary%IS_mask)
-            Ocean_Ice_Boundary%IS_mask=Ocean_Ice_Boundary%IS_mask-1
-            where (Ocean_Ice_Boundary%IS_mask.ne.0.) Ocean_Ice_Boundary%IS_mask=1.
-       endif
 
        if( ASSOCIATED(Ocean_Ice_Boundary%frazil) ) then
           if(do_area_weighted_flux) then
