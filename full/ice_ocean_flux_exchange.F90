@@ -491,6 +491,35 @@ contains
           else
              call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving_hflx, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving_hflx)
           endif
+        endif
+
+       if( ASSOCIATED(Ocean_Ice_Boundary%calving) ) then
+          if(do_area_weighted_flux) then
+             if (Ocean%is_ocean_pe) then
+               allocate(tmp(size(Ocean%area,1), size(Ocean%area,2)))
+               tmp(:,:) = Ocean%calving(:,:) * Ocean%area(:,:)
+             endif
+             call fms_mpp_domains_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving)
+             if (Ice%slow_ice_pe) &
+               call divide_by_area(data=Ocean_Ice_Boundary%calving, area=Ice%area)
+             if (Ocean%is_ocean_pe) deallocate(tmp)
+          else
+             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving)
+          endif
+       endif
+       if( ASSOCIATED(Ocean_Ice_Boundary%calving_hflx) ) then
+          if(do_area_weighted_flux) then
+             if (Ocean%is_ocean_pe) then
+               allocate(tmp(size(Ocean%area,1), size(Ocean%area,2)))
+               tmp(:,:) = Ocean%calving_hflx(:,:) * Ocean%area(:,:)
+             endif
+             call fms_mpp_domains_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving_hflx)
+             if (Ice%slow_ice_pe) &
+               call divide_by_area(data=Ocean_Ice_Boundary%calving_hflx, area=Ice%area)
+             if (Ocean%is_ocean_pe) deallocate(tmp)
+          else
+             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving_hflx, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving_hflx)
+          endif
        endif
 
        ! Extra fluxes
