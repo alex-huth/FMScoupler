@@ -373,6 +373,7 @@ program coupler_main
   use ice_model_mod,           only: ice_data_type_chksum, ocn_ice_bnd_type_chksum
   use ice_model_mod,           only: atm_ice_bnd_type_chksum, lnd_ice_bnd_type_chksum
   use ice_model_mod,           only: unpack_ocean_ice_boundary, exchange_slow_to_fast_ice
+  use ice_model_mod,           only: unpack_ocean_ice_boundary_calved_shelf_bergs
   use ice_model_mod,           only: ice_model_fast_cleanup, unpack_land_ice_boundary
   use ice_model_mod,           only: exchange_fast_to_slow_ice, update_ice_model_slow
 
@@ -512,6 +513,8 @@ program coupler_main
   logical :: do_debug=.FALSE.       !< If .TRUE. print additional debugging messages.
   integer :: check_stocks = 0 ! -1: never 0: at end of run only n>0: every n coupled steps
   logical :: use_hyper_thread = .false.
+  logical :: calve_ice_shelf_bergs = .false. !< If true, flux through a static ice front is converted
+                                             !!to point bergs
 
   namelist /coupler_nml/ current_date, calendar, force_date_from_namelist,         &
                          months, days, hours, minutes, seconds, dt_cpld, dt_atmos, &
@@ -521,7 +524,8 @@ program coupler_main
                          concurrent, do_concurrent_radiation, use_lag_fluxes,      &
                          check_stocks, restart_interval, do_debug, do_chksum,      &
                          use_hyper_thread, concurrent_ice, slow_ice_with_ocean,    &
-                         do_endpoint_chksum, combined_ice_and_ocean
+                         do_endpoint_chksum, combined_ice_and_ocean,               &
+                         calve_ice_shelf_bergs
 
   integer :: initClock, mainClock, termClock
 
@@ -735,6 +739,7 @@ program coupler_main
         call flux_ocean_to_ice_finish( Time_flux_ocean_to_ice, Ice, Ocean_Ice_Boundary )
 
         call unpack_ocean_ice_boundary( Ocean_ice_boundary, Ice )
+        if (calve_ice_shelf_bergs) call unpack_ocean_ice_boundary_calved_shelf_bergs(Ice, Ocean_ice_boundary)
         if (do_chksum) call slow_ice_chksum('update_ice_slow+', nc, Ice, Ocean_ice_boundary)
         call fms_mpp_clock_end(newClock6s)
       endif
@@ -993,7 +998,7 @@ program coupler_main
        ! These two calls occur on whichever PEs handle the fast ice processess.
         call ice_model_fast_cleanup(Ice)
 
-        call unpack_land_ice_boundary(Ice, Land_ice_boundary)
+        call unpack_land_ice_boundary(Ice, Land_ice_boundary, calve_ice_shelf_bergs)
         call fms_mpp_clock_end(newClock10f)
       endif
 
@@ -1799,7 +1804,8 @@ contains
       endif
       call fms_mpp_clock_begin(id_ocean_model_init)
       call ocean_model_init( Ocean, Ocean_state, Time_init, Time, &
-                             gas_fields_ocn=gas_fields_ocn  )
+                             gas_fields_ocn=gas_fields_ocn, &
+                             calve_ice_shelf_bergs=calve_ice_shelf_bergs)
       call fms_mpp_clock_end(id_ocean_model_init)
 
       if (concurrent) then
