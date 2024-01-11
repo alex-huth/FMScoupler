@@ -739,7 +739,6 @@ program coupler_main
         call flux_ocean_to_ice_finish( Time_flux_ocean_to_ice, Ice, Ocean_Ice_Boundary )
 
         call unpack_ocean_ice_boundary( Ocean_ice_boundary, Ice )
-        if (calve_ice_shelf_bergs) call unpack_ocean_ice_boundary_calved_shelf_bergs(Ice, Ocean_ice_boundary)
         if (do_chksum) call slow_ice_chksum('update_ice_slow+', nc, Ice, Ocean_ice_boundary)
         call fms_mpp_clock_end(newClock6s)
       endif
@@ -756,6 +755,10 @@ program coupler_main
         call fms_mpp_clock_begin(newClock10e)
         call exchange_fast_to_slow_ice(Ice)
         call fms_mpp_clock_end(newClock10e)
+        call fms_mpp_clock_begin(newClock10f)
+        if (Ice%slow_ice_pe .and. calve_ice_shelf_bergs) &
+          call unpack_ocean_ice_boundary_calved_shelf_bergs(Ice, Ocean_ice_boundary)
+        call fms_mpp_clock_end(newClock10f)
       endif
 
       if (Ice%fast_ice_pe) then
@@ -998,7 +1001,7 @@ program coupler_main
        ! These two calls occur on whichever PEs handle the fast ice processess.
         call ice_model_fast_cleanup(Ice)
 
-        call unpack_land_ice_boundary(Ice, Land_ice_boundary, calve_ice_shelf_bergs)
+        call unpack_land_ice_boundary(Ice, Land_ice_boundary)
         call fms_mpp_clock_end(newClock10f)
       endif
 
@@ -1009,6 +1012,10 @@ program coupler_main
         call fms_mpp_clock_begin(newClock10e)
         call exchange_fast_to_slow_ice(Ice)
         call fms_mpp_clock_end(newClock10e)
+        call fms_mpp_clock_begin(newClock10f)
+        if (Ice%slow_ice_pe .and. calve_ice_shelf_bergs) &
+          call unpack_ocean_ice_boundary_calved_shelf_bergs(Ice, Ocean_ice_boundary)
+        call fms_mpp_clock_end(newClock10f)
       endif
 
       !   ------ slow-ice model ------

@@ -225,7 +225,7 @@ contains
   !!        fprec = mass of frozen precipitation since last
   !!                  time step (Kg/m2)
   !!       runoff = mass of runoff since last time step (Kg/m2)
-  !!       runoff = mass of calving since last time step (Kg/m2)
+  !!       calving = mass of calving since last time step (Kg/m2)
   !!       p_surf = surface pressure (Pa)
   !! </pre>
   subroutine flux_ice_to_ocean ( Time, Ice, Ocean, Ice_Ocean_Boundary )
@@ -375,7 +375,9 @@ contains
   !!        u_surf = zonal ocean current/ice motion (m/s)
   !!        v_surf = meridional ocean current/ice motion (m/s)
   !!        v_surf = meridional ocean current/ice motion (m/s)
-  !!       sea_lev = sea level used to drive ice accelerations (m)
+  !!        sea_lev = sea level used to drive ice accelerations (m)
+  !!        calving = ice-sheet calving flux to ocean (kg m-2 s-1)
+  !!        calving_hflx = heat flux associated with ice-sheet calving (W/m2)
   !! </pre>
   !!
   !! \throw FATAL, "Ocean_Ice_Boundary%xtype must be DIRECT or REDIST."
