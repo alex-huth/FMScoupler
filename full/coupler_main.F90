@@ -379,7 +379,7 @@ program coupler_main
 
   use ocean_model_mod,         only: update_ocean_model, ocean_model_init,  ocean_model_end
   use ocean_model_mod,         only: ocean_public_type, ocean_state_type, ice_ocean_boundary_type
-  use ocean_model_mod,         only: ocean_model_restart
+  use ocean_model_mod,         only: ocean_model_restart, land_ocean_boundary_type
   use ocean_model_mod,         only: ocean_public_type_chksum, ice_ocn_bnd_type_chksum
 
   use combined_ice_ocean_driver, only: update_slow_ice_and_ocean, ice_ocean_driver_type
@@ -392,6 +392,7 @@ program coupler_main
   use flux_exchange_mod,       only: generate_sfc_xgrid, send_ice_mask_sic
   use flux_exchange_mod,       only: flux_down_from_atmos, flux_up_to_atmos
   use flux_exchange_mod,       only: flux_land_to_ice, flux_ice_to_ocean, flux_ocean_to_ice
+  use flux_exchange_mod,       only: flux_land_to_ocean
   use flux_exchange_mod,       only: flux_ice_to_ocean_finish, flux_ocean_to_ice_finish
   use flux_exchange_mod,       only: flux_check_stocks, flux_init_stocks
   use flux_exchange_mod,       only: flux_ocean_from_ice_stocks, flux_ice_to_ocean_stocks
@@ -422,6 +423,7 @@ program coupler_main
   type(atmos_ice_boundary_type)      :: Atmos_ice_boundary
   type(land_ice_atmos_boundary_type) :: Land_ice_atmos_boundary
   type(land_ice_boundary_type)       :: Land_ice_boundary
+  type(land_ocean_boundary_type)     :: Land_ocean_boundary
   type(ice_ocean_boundary_type)      :: Ice_ocean_boundary
   type(ocean_ice_boundary_type)      :: Ocean_ice_boundary
   type(ice_ocean_driver_type), pointer :: ice_ocean_driver_CS => NULL()
@@ -531,7 +533,7 @@ program coupler_main
 
   integer :: newClock0, newClock1, newClock2, newClock3, newClock4, newClock5, newClock7
   integer :: newClock6f, newClock6s, newClock6e, newClock10f, newClock10s, newClock10e
-  integer :: newClock8, newClock9, newClock11, newClock12, newClock13, newClock14, newClocka
+  integer :: newClock8, newClock9, newClock9b, newClock11, newClock12, newClock13, newClock14, newClocka
   integer :: newClockb, newClockc, newClockd, newClocke, newClockf, newClockg, newClockh, newClocki
   integer :: newClockj, newClockk, newClockl
 
@@ -640,6 +642,7 @@ program coupler_main
     newClockk  = fms_mpp_clock_id( '  A-L: update_atmos_model_state')
     newClock8  = fms_mpp_clock_id( ' ATM: update_land_model_slow' )
     newClock9  = fms_mpp_clock_id( ' ATM: flux_land_to_ice' )
+    newClock9b = fms_mpp_clock_id( ' ATM: flux_land_to_ocean' )
   endif
   if (Ice%pe) then
     if (Ice%fast_ice_pe) call fms_mpp_set_current_pelist(Ice%fast_pelist)
@@ -985,6 +988,10 @@ program coupler_main
                  Land_ice_atmos_boundary, Atmos_ice_boundary, Atmos_land_boundary)
 
       Atmos_ice_boundary%p = 0.0 ! call flux_atmos_to_ice_slow ?
+
+      call fms_mpp_clock_begin(newClock9b)
+      call flux_land_to_ocean( Time, Land, Ocean, Land_ocean_boundary )
+      call fms_mpp_clock_end(newClock9b)
       Time = Time_atmos
       call fms_mpp_clock_end(newClock5)
     endif                     !Atm%pe block
@@ -1073,7 +1080,7 @@ program coupler_main
 
       if (do_ocean) &
         call update_ocean_model( Ice_ocean_boundary, Ocean_state,  Ocean, &
-                                 Time_ocean, Time_step_cpld )
+                                 Time_ocean, Time_step_cpld, Land_ocean_boundary=Land_ocean_boundary )
       endif
 
       if (do_chksum) call ocean_chksum('update_ocean_model+', nc, Ocean, Ice_ocean_boundary)
@@ -1869,7 +1876,7 @@ contains
     call fms_mpp_clock_begin(id_flux_exchange_init)
     call flux_exchange_init ( Time, Atm, Land, Ice, Ocean, Ocean_state,&
              atmos_ice_boundary, land_ice_atmos_boundary, &
-             land_ice_boundary, ice_ocean_boundary, ocean_ice_boundary, &
+             land_ice_boundary, land_ocean_boundary, ice_ocean_boundary, ocean_ice_boundary, &
          do_ocean, slow_ice_ocean_pelist, dt_atmos=dt_atmos, dt_cpld=dt_cpld)
     call fms_mpp_set_current_pelist(ensemble_pelist(ensemble_id,:))
     call fms_mpp_clock_end(id_flux_exchange_init)
