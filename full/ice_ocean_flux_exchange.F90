@@ -145,6 +145,12 @@ contains
     allocate( ice_ocean_boundary%calving_hflx  (is:ie,js:je) ) ;    ice_ocean_boundary%calving_hflx = 0.0
     allocate( ice_ocean_boundary%p        (is:ie,js:je) ) ;         ice_ocean_boundary%p = 0.0
     allocate( ice_ocean_boundary%mi       (is:ie,js:je) ) ;         ice_ocean_boundary%mi = 0.0
+
+!!$    !Allocating ice-sheet surface mass flux fields
+!!$    if (associated(Ice%shelf_sfc_mass_flux)) then
+!!$      allocate( ice_ocean_boundary%shelf_sfc_mass_flux (is:ie,js:je) ) ; ice_ocean_boundary%shelf_sfc_mass_flux = 0.0
+!!$      allocate( ice_ocean_boundary%shelf_sfc_mass_hflx (is:ie,js:je) ) ; ice_ocean_boundary%shelf_sfc_mass_hflx = 0.0
+!!$    endif
     !Allocating iceberg fields, if the corresponding fields are assosiated in the sea ice model(s)
     if (associated(Ice%ustar_berg)) then
       allocate( ice_ocean_boundary%ustar_berg (is:ie,js:je) ) ;     ice_ocean_boundary%ustar_berg = 0.0
@@ -229,6 +235,7 @@ contains
   !!       runoff = mass of runoff since last time step (Kg/m2)
   !!       calving = mass of calving since last time step (Kg/m2)
   !!       p_surf = surface pressure (Pa)
+!!$  !!       shelf_sfc_mass_flux = ice-sheet surface mass balance flux (Kg/m2)
   !! </pre>
   subroutine flux_ice_to_ocean ( Ice, Ocean, Ice_Ocean_Boundary )
 
@@ -299,6 +306,9 @@ contains
     if(ASSOCIATED(Ice_Ocean_Boundary%calving) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%calving, Ice_Ocean_Boundary%calving, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
+!!$    if(ASSOCIATED(Ice_Ocean_Boundary%shelf_sfc_mass_flux) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+!!$         Ice%calving, Ice_Ocean_Boundary%shelf_sfc_mass_flux, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
     if(ASSOCIATED(Ice_Ocean_Boundary%ustar_berg) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
        Ice%ustar_berg, Ice_Ocean_Boundary%ustar_berg, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
@@ -313,6 +323,9 @@ contains
 
     if(ASSOCIATED(Ice_Ocean_Boundary%calving_hflx) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%calving_hflx, Ice_Ocean_Boundary%calving_hflx, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
+!!$    if(ASSOCIATED(Ice_Ocean_Boundary%shelf_sfc_mass_hflx) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+!!$         Ice%calving, Ice_Ocean_Boundary%shelf_sfc_mass_hflx, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
     if(ASSOCIATED(Ice_Ocean_Boundary%q_flux) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%flux_q, Ice_Ocean_Boundary%q_flux, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
@@ -349,6 +362,11 @@ contains
     call fms_data_override('OCN', 'calving_hflx',   Ice_Ocean_Boundary%calving_hflx  , Time )
     call fms_data_override('OCN', 'p',         Ice_Ocean_Boundary%p        , Time )
     call fms_data_override('OCN', 'mi',        Ice_Ocean_Boundary%mi       , Time )
+
+!!$    if (associated(Ice_Ocean_Boundary%shelf_sfc_mass_flux)) then
+!!$      call fms_data_override('OCN', 'shelf_sfc_mass_flux',   Ice_Ocean_Boundary%shelf_sfc_mass_flux, Time )
+!!$      call fms_data_override('OCN', 'shelf_sfc_mass_hflx',    Ice_Ocean_Boundary%shelf_sfc_mass_hflx   , Time )
+!!$    endif
 
    !Are these if statements needed, or does data_override routine check if variable is associated?
     if (ASSOCIATED(Ice_Ocean_Boundary%ustar_berg) ) &
