@@ -64,9 +64,10 @@ contains
     fluxLandOceanClock = fms_mpp_clock_id( 'Flux land to ice sheet', flags=fms_clock_flag_default, grain=CLOCK_ROUTINE )
 
     if (do_IS_smb) then
+      !TODO: This is not working correctly. No matter the grid_spec and xgrids, it still masks out the ice sheet...
        call fms_xgrid_setup_xmap(xmap_IS_smb, (/ 'LND', 'OCN' /),       &
             (/ Land%Domain, Ocean%Domain /),                    &
-            "INPUT/grid_spec.nc"             )
+            "INPUT_newxg/grid_spec.nc"             )
        ! exchange grid indices
        X2_GRID_LND = 1; X2_GRID_OCN = 2;
        n_xgrid_IS_smb = max(fms_xgrid_count(xmap_IS_smb),1)
@@ -125,7 +126,7 @@ contains
        call fms_data_override('OCN', 'shelf_sfc_mass_flux' , Land_Ocean_Boundary%shelf_sfc_mass_flux , Time)
        call fms_data_override('OCN', 'shelf_sfc_mass_hflx' , Land_Ocean_Boundary%shelf_sfc_mass_hflx , Time)
 
-       ! compute stock increment
+       ! compute stock increment (land heat stock not yet implemented)
        ocn_buf(:,:,1) = Land_Ocean_Boundary%shelf_sfc_mass_flux
        call fms_xgrid_stock_move(from=fms_stock_constants_lnd_stock(ISTOCK_WATER), to=fms_stock_constants_ocn_stock(ISTOCK_WATER), &
             & grid_index=X2_GRID_OCN, &
