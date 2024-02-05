@@ -83,7 +83,7 @@
 !!     <td>Turns on/off the land runoff interpolation to the ocean.</td>
 !!   </tr>
 !!   <tr>
-!!     <td>do_ice_shelf_smb</td>
+!!     <td>do_ice_shelf_adot</td>
 !!     <td>logical</td>
 !!     <td>.TRUE.</td>
 !!     <td>Turns on/off the land surface mass flux interpolation to the ice sheet.</td>
@@ -150,7 +150,7 @@
 !!
 !!    The land and ice grids exchange runoff data using the exchange grid xmap_runoff.
 !!
-!!    The land and ocean grids exchange surface mass flux data using the exchange grid xmap_IS_smb
+!!    The land and ocean grids exchange surface mass flux data using the exchange grid xmap_IS_adot
 !!
 !!    Transfer of data between the ice bottom and ocean does not require an exchange
 !!    grid as the grids are physically identical. The flux routines will automatically
@@ -591,7 +591,7 @@ module flux_exchange_mod
   logical :: debug_stocks = .FALSE.
   logical :: divert_stocks_report = .FALSE.
   logical :: do_runoff = .TRUE. !< Turns on/off the land runoff interpolation to the ocean
-  logical :: do_ice_shelf_smb = .TRUE. !< Turns on/off the land surface mass flux interpolation to the ice sheet
+  logical :: do_ice_shelf_adot = .TRUE. !< Turns on/off the land surface mass flux interpolation to the ice sheet
   logical :: do_forecast = .false.
   integer :: nblocks = 1
 
@@ -603,7 +603,7 @@ module flux_exchange_mod
 
   namelist /flux_exchange_nml/ z_ref_heat, z_ref_mom, ex_u_star_smooth_bug, sw1way_bug,&
        & do_area_weighted_flux, debug_stocks, divert_stocks_report, do_runoff, do_forecast, nblocks,&
-       & partition_fprec_from_lprec, scale_precip_2d, do_ice_shelf_smb
+       & partition_fprec_from_lprec, scale_precip_2d, do_ice_shelf_adot
 
   logical :: gas_fluxes_initialized = .false.  ! This is set to true when the following types are initialized.
   type(FmsCoupler1dBC_type), target :: ex_gas_fields_atm  ! gas fields in atm
@@ -777,7 +777,7 @@ contains
             ex_gas_fields_atm, ex_gas_fields_ice, ex_gas_fluxes)
 
        call land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl, do_runoff, cplClock)
-       call land_ocean_flux_exchange_init(Land, Ocean, land_ocean_boundary, Dt_cpl, do_ice_shelf_smb, cplClock)
+       call land_ocean_flux_exchange_init(Land, Ocean, land_ocean_boundary, Dt_cpl, do_ice_shelf_adot, cplClock)
     end if
 
     call fms_mpp_set_current_pelist()
