@@ -599,9 +599,6 @@ program coupler_main
 
       Atmos_ice_boundary%p = 0.0 ! call flux_atmos_to_ice_slow ?
 
-      call fms_mpp_clock_begin(newClock9b)
-      call flux_land_to_ocean( Time, Land, Ocean, Land_ocean_boundary )
-      call fms_mpp_clock_end(newClock9b)
       Time = Time_atmos
 
       !> end atm_clock_1
@@ -646,6 +643,12 @@ program coupler_main
           call coupler_flux_ice_to_ocean(Ice, Ocean, Ice_ocean_boundary, coupler_clocks, &
           slow_ice_ocean_pelist=slow_ice_ocean_pelist, set_current_slow_ice_ocean_pelist=.True.)
       Time_flux_ice_to_ocean = Time
+    endif
+
+    if (Atm%pe) then
+      call fms_mpp_clock_begin(newClock9b)
+      call flux_land_to_ocean( Time, Land, Ocean, Land_ocean_boundary )
+      call fms_mpp_clock_end(newClock9b)
     endif
 
     if (Ocean%is_ocean_pe) then
