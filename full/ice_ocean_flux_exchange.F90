@@ -539,8 +539,9 @@ contains
     call fms_data_override('ICE', 's',         Ocean_Ice_Boundary%s,         Time)
     call fms_data_override('ICE', 'frazil',    Ocean_Ice_Boundary%frazil,    Time)
     call fms_data_override('ICE', 'sea_level', Ocean_Ice_Boundary%sea_level, Time)
-    call fms_data_override('ICE', 'calving',      Ocean_Ice_Boundary%calving,      Time)
-    call fms_data_override('ICE', 'calving_hflx', Ocean_Ice_Boundary%calving_hflx, Time)
+    !Ice-shelf calving
+    call fms_data_override('ICE', 'IS_calving',      Ocean_Ice_Boundary%calving,      Time)
+    call fms_data_override('ICE', 'IS_calving_hflx', Ocean_Ice_Boundary%calving_hflx, Time)
     call fms_coupler_type_data_override('ICE', Ocean_Ice_Boundary%fields, Time)
 
     !  Perform diagnostic output for the ocean_ice_boundary fields
