@@ -153,6 +153,12 @@ contains
     if (associated(Ice%mass_berg)) then
       allocate( ice_ocean_boundary%mass_berg  (is:ie,js:je) ) ;     ice_ocean_boundary%mass_berg = 0.0
     endif
+    if (associated(Ice%frac_cberg)) then
+      allocate( ice_ocean_boundary%frac_cberg  (is:ie,js:je) ) ;     ice_ocean_boundary%frac_cberg = 0.0
+    endif
+    if (associated(Ice%frac_cberg_calved)) then
+      allocate( ice_ocean_boundary%frac_cberg_calved(is:ie,js:je) ) ; ice_ocean_boundary%frac_cberg_calved = 0.0
+    endif
     ! Copy the stagger indication variables from the ice processors the ocean
     ! PEs and vice versa.  The defaults are large negative numbers, so the
     ! global max here picks out only values that have been set on active PEs.
@@ -307,6 +313,12 @@ contains
     if(ASSOCIATED(Ice_Ocean_Boundary%mass_berg) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%mass_berg, Ice_Ocean_Boundary%mass_berg, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
+    if(ASSOCIATED(Ice_Ocean_Boundary%frac_cberg) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+         Ice%frac_cberg, Ice_Ocean_Boundary%frac_cberg, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
+     if(ASSOCIATED(Ice_Ocean_Boundary%frac_cberg_calved) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+         Ice%frac_cberg_calved, Ice_Ocean_Boundary%frac_cberg_calved, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
     if(ASSOCIATED(Ice_Ocean_Boundary%runoff_hflx) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%runoff_hflx, Ice_Ocean_Boundary%runoff_hflx, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
@@ -315,6 +327,12 @@ contains
 
     if(ASSOCIATED(Ice_Ocean_Boundary%q_flux) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%flux_q, Ice_Ocean_Boundary%q_flux, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
+    if(ASSOCIATED(Ice_Ocean_Boundary%frac_cberg) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+         Ice%frac_cberg, Ice_Ocean_Boundary%frac_cberg, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
+    if(ASSOCIATED(Ice_Ocean_Boundary%frac_cberg_calved) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+         Ice%frac_cberg_calved, Ice_Ocean_Boundary%frac_cberg_calved, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
     call fms_mpp_clock_end(fluxIceOceanClock)
     call fms_mpp_clock_end(cplOcnClock)
@@ -356,6 +374,10 @@ contains
       call fms_data_override('OCN', 'area_berg',  Ice_Ocean_Boundary%area_berg , Time )
     if (ASSOCIATED(Ice_Ocean_Boundary%mass_berg)  ) &
       call fms_data_override('OCN', 'mass_berg',  Ice_Ocean_Boundary%mass_berg , Time )
+    if (ASSOCIATED(Ice_Ocean_Boundary%frac_cberg)  ) &
+      call fms_data_override('OCN', 'frac_cberg',  Ice_Ocean_Boundary%frac_cberg , Time )
+    if (ASSOCIATED(Ice_Ocean_Boundary%frac_cberg_calved)  ) &
+      call fms_data_override('OCN', 'frac_cberg_calved',  Ice_Ocean_Boundary%frac_cberg_calved , Time )
 
     ! Extra fluxes
     call fms_coupler_type_data_override('OCN', Ice_Ocean_Boundary%fluxes, Time )

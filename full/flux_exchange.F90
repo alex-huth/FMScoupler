@@ -232,7 +232,8 @@
 !!   - FROM the ice boundary TO the ocean boundary (in flux_ice_to_ocean):
 !!
 !!        u_flux, v_flux, t_flux, q_flux, salt_flux, lw_flux, sw_flux,
-!!        lprec, fprec, runoff, calving, p, ustar_berg, area_berg, mass_berg
+!!        lprec, fprec, runoff, calving, p, ustar_berg, area_berg, mass_berg,
+!!        frac_cberg, frac_cberg_calved
 !!
 !!   - FROM the ocean boundary TO the ice boundary (in flux_ocean_to_ice):
 !!
