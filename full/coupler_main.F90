@@ -513,8 +513,11 @@ program coupler_main
   logical :: do_debug=.FALSE.       !< If .TRUE. print additional debugging messages.
   integer :: check_stocks = 0 ! -1: never 0: at end of run only n>0: every n coupled steps
   logical :: use_hyper_thread = .false.
-  logical :: calve_ice_shelf_bergs = .false. !< If true, flux through a static ice front is converted
-                                             !!to point bergs
+  character(len=6) :: calve_ice_shelf_bergs = 'NONE'  !< If 'POINT', convert ice shelf flux through
+                                              !! a static ice shelf front into point-particle icebergs. If 'BONDED',
+                                              !! convert ice shelf into bonded-particle tabular bergs where tabular
+                                              !! calving mask exceeds zero. If 'MIXED', use 'POINT' for N Hemisphere
+                                              !! and 'BONDED' for S Hemisphere. If 'NONE', no calving.
 
   namelist /coupler_nml/ current_date, calendar, force_date_from_namelist,         &
                          months, days, hours, minutes, seconds, dt_cpld, dt_atmos, &
@@ -756,7 +759,7 @@ program coupler_main
         call exchange_fast_to_slow_ice(Ice)
         call fms_mpp_clock_end(newClock10e)
         call fms_mpp_clock_begin(newClock10f)
-        if (Ice%slow_ice_pe .and. calve_ice_shelf_bergs) &
+        if (Ice%slow_ice_pe .and. (trim(calve_ice_shelf_bergs) /= 'NONE')) &
           call unpack_ocean_ice_boundary_calved_shelf_bergs(Ice, Ocean_ice_boundary)
         call fms_mpp_clock_end(newClock10f)
       endif
@@ -1013,7 +1016,7 @@ program coupler_main
         call exchange_fast_to_slow_ice(Ice)
         call fms_mpp_clock_end(newClock10e)
         call fms_mpp_clock_begin(newClock10f)
-        if (Ice%slow_ice_pe .and. calve_ice_shelf_bergs) &
+        if (Ice%slow_ice_pe .and. (trim(calve_ice_shelf_bergs) /= 'NONE')) &
           call unpack_ocean_ice_boundary_calved_shelf_bergs(Ice, Ocean_ice_boundary)
         call fms_mpp_clock_end(newClock10f)
       endif
@@ -1870,7 +1873,7 @@ contains
     call flux_exchange_init ( Time, Atm, Land, Ice, Ocean, Ocean_state,&
              atmos_ice_boundary, land_ice_atmos_boundary, &
              land_ice_boundary, ice_ocean_boundary, ocean_ice_boundary, &
-         do_ocean, slow_ice_ocean_pelist, dt_atmos=dt_atmos, dt_cpld=dt_cpld)
+             do_ocean, slow_ice_ocean_pelist, calve_ice_shelf_bergs, dt_atmos=dt_atmos, dt_cpld=dt_cpld)
     call fms_mpp_set_current_pelist(ensemble_pelist(ensemble_id,:))
     call fms_mpp_clock_end(id_flux_exchange_init)
     call fms_mpp_set_current_pelist()
