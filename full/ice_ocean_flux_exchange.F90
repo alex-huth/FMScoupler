@@ -414,7 +414,7 @@ contains
   !!        calving = ice-sheet calving to point icebergs: flux to ocean (kg m-2 s-1)
   !!        calving_hflx = heat flux associated with ice-sheet calving to point icebergs (W/m2)
   !!        tabular_calve_mask = mask for calving of tabular bonded bergs [nondim]
-  !!        mass_shelf = the ice shelf mass field, used for calving of tabular bonded bergs [kg m-2]
+  !!        mass_shelf = the ice shelf mass field per ice shelf area, used for calving of tabular bonded bergs [kg m-2]
   !!        area_shelf_h = the area in the grid cell covered by the ice shelf, for calving tabular bonded bergs [m2]
   !! </pre>
   !!
