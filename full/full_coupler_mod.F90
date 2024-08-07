@@ -66,7 +66,7 @@ module full_coupler_mod
 
   use ocean_model_mod,         only: update_ocean_model, ocean_model_init,  ocean_model_end
   use ocean_model_mod,         only: ocean_public_type, ocean_state_type, ice_ocean_boundary_type
-  use ocean_model_mod,         only: ocean_model_restart
+  use ocean_model_mod,         only: ocean_model_restart, land_ocean_boundary_type
   use ocean_model_mod,         only: ocean_public_type_chksum, ice_ocn_bnd_type_chksum
 
   use combined_ice_ocean_driver, only: update_slow_ice_and_ocean, ice_ocean_driver_type
@@ -79,6 +79,7 @@ module full_coupler_mod
   use flux_exchange_mod,       only: generate_sfc_xgrid, send_ice_mask_sic
   use flux_exchange_mod,       only: flux_down_from_atmos, flux_up_to_atmos
   use flux_exchange_mod,       only: flux_land_to_ice, flux_ice_to_ocean, flux_ocean_to_ice
+  use flux_exchange_mod,       only: flux_land_to_ocean
   use flux_exchange_mod,       only: flux_ice_to_ocean_finish, flux_ocean_to_ice_finish
   use flux_exchange_mod,       only: flux_check_stocks, flux_init_stocks
   use flux_exchange_mod,       only: flux_ocean_from_ice_stocks, flux_ice_to_ocean_stocks
@@ -95,6 +96,7 @@ module full_coupler_mod
   public :: ocean_public_type, ocean_state_type
   public :: atmos_land_boundary_type, atmos_ice_boundary_type, land_ice_atmos_boundary_type
   public :: land_ice_boundary_type, ice_ocean_boundary_type, ocean_ice_boundary_type, ice_ocean_driver_type
+  public :: land_ocean_boundary_type
 
   public :: fmsconstants_init
 
@@ -129,7 +131,7 @@ module full_coupler_mod
   public :: coupler_flux_atmos_to_ocean, coupler_update_atmos_model_state
 
   public :: coupler_update_land_model_slow, coupler_flux_land_to_ice
-  public :: coupler_unpack_land_ice_boundary, coupler_flux_ice_to_ocean
+  public :: coupler_unpack_land_ice_boundary, coupler_flux_ice_to_ocean, coupler_flux_land_to_ocean
   public :: coupler_update_ice_model_slow_and_stocks, coupler_update_ocean_model
 
   public :: coupler_clock_type, coupler_components_type, coupler_chksum_type
@@ -276,6 +278,7 @@ module full_coupler_mod
     integer :: ice_model_init
     integer :: ocean_model_init
     integer :: flux_exchange_init
+    integer :: flux_land_to_ocean
   end type coupler_clock_type
 
   type coupler_components_type
@@ -325,7 +328,7 @@ contains
 
 !> \brief Initialize all defined exchange grids and all boundary maps
   subroutine coupler_init(Atm, Ocean, Land, Ice, Ocean_state, Atmos_land_boundary, Atmos_ice_boundary, &
-      Ocean_ice_boundary, Ice_ocean_boundary, Land_ice_atmos_boundary, Land_ice_boundary,              &
+      Ocean_ice_boundary, Ice_ocean_boundary, Land_ice_atmos_boundary, Land_ice_boundary, Land_ocean_boundary, &
       Ice_ocean_driver_CS, Ice_bc_restart, Ocn_bc_restart, ensemble_pelist, slow_ice_ocean_pelist, conc_nthreads, &
       coupler_clocks, coupler_components_obj, coupler_chksum_obj, Time_step_cpld, Time_step_atmos, Time_atmos, &
       Time_ocean, num_cpld_calls, num_atmos_calls, Time, Time_start, Time_end, Time_restart, Time_restart_current)
@@ -342,6 +345,7 @@ contains
     type(ice_ocean_boundary_type),   intent(inout) :: Ice_ocean_boundary
     type(ocean_ice_boundary_type),   intent(inout) :: Ocean_ice_boundary
     type(land_ice_boundary_type),    intent(inout) :: Land_ice_boundary
+    type(land_ocean_boundary_type),  intent(inout) :: Land_ocean_boundary
     type(ice_ocean_driver_type), pointer, intent(inout) :: Ice_ocean_driver_CS
     type(land_ice_atmos_boundary_type),   intent(inout) :: Land_ice_atmos_boundary
     type(FmsNetcdfDomainFile_t), pointer, dimension(:), intent(inout) :: Ice_bc_restart, Ocn_bc_restart
@@ -1055,7 +1059,7 @@ contains
     call fms_mpp_clock_begin(coupler_clocks%flux_exchange_init)
     call flux_exchange_init ( Time, Atm, Land, Ice, Ocean, Ocean_state,&
              atmos_ice_boundary, land_ice_atmos_boundary, &
-             land_ice_boundary, ice_ocean_boundary, ocean_ice_boundary, &
+             land_ice_boundary, land_ocean_boundary, ice_ocean_boundary, ocean_ice_boundary, &
          do_ocean, slow_ice_ocean_pelist, dt_atmos=dt_atmos, dt_cpld=dt_cpld)
     call fms_mpp_set_current_pelist(ensemble_pelist(ensemble_id,:))
     call fms_mpp_clock_end(coupler_clocks%flux_exchange_init)
@@ -1732,6 +1736,7 @@ contains
       coupler_clocks%update_atmos_model_state  = fms_mpp_clock_id( '  A-L: update_atmos_model_state')
       coupler_clocks%update_land_model_slow    = fms_mpp_clock_id( ' ATM: update_land_model_slow' )
       coupler_clocks%flux_land_to_ice          = fms_mpp_clock_id( ' ATM: flux_land_to_ice' )
+      coupler_clocks%flux_land_to_ocean        = fms_mpp_clock_id( ' ATM: flux_land_to_ocean' )
     endif
     if (Ice%pe) then
       if (Ice%fast_ice_pe) call fms_mpp_set_current_pelist(Ice%fast_pelist)
@@ -1882,6 +1887,25 @@ contains
     call fms_mpp_clock_end(coupler_clocks%flux_ice_to_ocean)
 
   end subroutine coupler_flux_ice_to_ocean
+
+  !> \brief This subroutine calls flux_land_to_ocean
+  !! Clocks are set before and after call flux_land_to_ocean.
+  subroutine coupler_flux_land_to_ocean( Time_flux_land_to_ocean, Land, Ocean, Land_ocean_boundary, coupler_clocks)
+
+    implicit none
+
+    type(FmsTime_type),  intent(inout) :: Time_flux_land_to_ocean !< Time flux_land_to_ocean
+    type(land_data_type), intent(inout) :: Land !< A derived data type for land boundary data
+    type(ocean_public_type), intent(inout) :: Ocean !< A derived data type for ocean boundary data
+    type(land_ocean_boundary_type), intent(inout):: Land_Ocean_Boundary !< A derived data type for properties
+                                                                        !! and fluxes passed from land to ocean
+    type(coupler_clock_type),      intent(inout) :: coupler_clocks      !< coupler_clocks
+
+    call fms_mpp_clock_begin(coupler_clocks%flux_land_to_ocean)
+    call flux_land_to_ocean( Time_flux_land_to_ocean, Land, Ocean, Land_ocean_boundary )
+    call fms_mpp_clock_end(coupler_clocks%flux_land_to_ocean)
+
+  end subroutine coupler_flux_land_to_ocean
 
   !> \brief This subroutine calls flux_ocean_to_ice_finish and unpack_ocean_ice_boundary.
   !! Clocks and pelists are set before/after the calls.  Checksum is computed if do_chksum=.True.
@@ -2332,19 +2356,21 @@ contains
   end subroutine coupler_update_ice_model_slow_and_stocks
 
   !> This subroutine calls update_ocean_model.  Chksums are computed if do_chksum = .True.
-  subroutine coupler_update_ocean_model(Ocean, Ocean_state, Ice_ocean_boundary, &
+  subroutine coupler_update_ocean_model(Ocean, Ocean_state, Ice_ocean_boundary, Land_ocean_boundary, &
                                         Time_ocean, Time_step_cpld, current_timestep, coupler_chksum_obj)
 
     implicit none
     type(ocean_public_type),         intent(inout) :: Ocean               !< Ocean
     type(ocean_state_type), pointer, intent(inout) :: Ocean_state         !< Ocean_state
     type(Ice_ocean_boundary_type),   intent(inout) :: Ice_ocean_boundary  !< Ice_ocean_boundary
+    type(land_ocean_boundary_type), intent(inout):: Land_Ocean_Boundary   !< Land_ocean_boundary
     type(FmsTime_type), intent(inout) :: Time_ocean   !< Time_ocean
     type(FmsTime_type), intent(in) :: Time_step_cpld  !< total number of timesteps
     integer, intent(in) :: current_timestep           !< current timestep
     type(coupler_chksum_type), intent(in) :: coupler_chksum_obj !< used for checksum computation
 
-    call update_ocean_model(Ice_ocean_boundary, Ocean_state,  Ocean, Time_ocean, Time_step_cpld)
+    call update_ocean_model(Ice_ocean_boundary, Ocean_state,  Ocean, Time_ocean, Time_step_cpld, &
+                            Land_ocean_boundary=Land_ocean_boundary)
     if (do_chksum) call coupler_chksum_obj%get_ocean_chksums('update_ocean_model+', current_timestep)
 
   end subroutine coupler_update_ocean_model

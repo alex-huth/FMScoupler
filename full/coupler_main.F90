@@ -351,6 +351,7 @@ program coupler_main
   type(atmos_ice_boundary_type), target  :: Atmos_ice_boundary
   type(land_ice_atmos_boundary_type), target  :: Land_ice_atmos_boundary
   type(land_ice_boundary_type), target  :: Land_ice_boundary
+  type(land_ocean_boundary_type), target :: Land_ocean_boundary
   type(ice_ocean_boundary_type), target :: Ice_ocean_boundary
   type(ocean_ice_boundary_type), target :: Ocean_ice_boundary
   type(ice_ocean_driver_type), pointer  :: ice_ocean_driver_CS => NULL()
@@ -390,7 +391,7 @@ program coupler_main
 
   call coupler_init(Atm, Ocean, Land, Ice, Ocean_state, Atmos_land_boundary, Atmos_ice_boundary, &
     Ocean_ice_boundary, Ice_ocean_boundary, Land_ice_atmos_boundary, Land_ice_boundary,          &
-    Ice_ocean_driver_CS, Ice_bc_restart, Ocn_bc_restart, ensemble_pelist, slow_ice_ocean_pelist, &
+    Land_ocean_boundary, Ice_ocean_driver_CS, Ice_bc_restart, Ocn_bc_restart, ensemble_pelist, slow_ice_ocean_pelist, &
     conc_nthreads, coupler_clocks, coupler_components_obj, coupler_chksum_obj, &
     Time_step_cpld, Time_step_atmos, Time_atmos, Time_ocean, num_cpld_calls,   &
     num_atmos_calls, Time, Time_start, Time_end, Time_restart, Time_restart_current)
@@ -597,8 +598,6 @@ program coupler_main
       !> call flux_atmos_to_ice_slow ?
       Atmos_ice_boundary%p = 0.0
 
-      Atmos_ice_boundary%p = 0.0 ! call flux_atmos_to_ice_slow ?
-
       Time = Time_atmos
 
       !> end atm_clock_1
@@ -645,11 +644,8 @@ program coupler_main
       Time_flux_ice_to_ocean = Time
     endif
 
-    if (Atm%pe) then
-      call fms_mpp_clock_begin(newClock9b)
-      call flux_land_to_ocean( Time, Land, Ocean, Land_ocean_boundary )
-      call fms_mpp_clock_end(newClock9b)
-    endif
+    if (Atm%pe) call coupler_flux_land_to_ocean( Time, Land, Ocean, &
+                                                 Land_ocean_boundary, coupler_clocks )
 
     if (Ocean%is_ocean_pe) then
       call fms_mpp_set_current_pelist(Ocean%pelist)
@@ -666,7 +662,7 @@ program coupler_main
         if (do_chksum) call coupler_chksum_obj%get_ocean_chksums('update_ocean_model-', nc)
         ! update_ocean_model since fluxes don't change here
         if (do_ocean) call coupler_update_ocean_model(Ocean, Ocean_state, Ice_ocean_boundary,&
-                      Time_ocean, Time_step_cpld, nc, coupler_chksum_obj)
+                      Land_ocean_boundary, Time_ocean, Time_step_cpld, nc, coupler_chksum_obj)
       end if
 
       ! Get stocks from "Ice_ocean_boundary" and add them to Ocean stocks.
