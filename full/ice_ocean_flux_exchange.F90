@@ -57,7 +57,7 @@ contains
   subroutine ice_ocean_flux_exchange_init(Time, Ice, Ocean, Ocean_state, ice_ocean_boundary, &
                                           ocean_ice_boundary, Dt_cpl_in, debug_stocks_in,    &
                                           do_area_weighted_flux_in, ex_gas_fields_ice, ex_gas_fluxes, &
-                                          do_ocean, slow_ice_ocean_pelist_in )
+                                          do_ocean, slow_ice_ocean_pelist_in, calve_ice_shelf_bergs )
 
     type(FmsTime_type),               intent(in)    :: Time !< The model's current time
     type(ice_data_type),           intent(inout) :: Ice !< A derived data type to specify ice boundary data
@@ -73,6 +73,11 @@ contains
     type(FmsCoupler1dBC_type),  intent(in)    :: ex_gas_fields_ice, ex_gas_fluxes
     logical,                       intent(in)    :: do_ocean
     integer, dimension(:),         intent(in)    :: slow_ice_ocean_pelist_in
+    character(len=*), intent(in) :: calve_ice_shelf_bergs !< If 'POINT', convert ice shelf flux through
+                                              !! a static ice shelf front into point-particle icebergs. If 'BONDED',
+                                              !! convert ice shelf into bonded-particle tabular bergs where tabular
+                                              !! calving mask exceeds zero. If 'MIXED', use 'POINT' for N Hemisphere
+                                              !! and 'BONDED' for S Hemisphere. If 'NONE', no calving.
     integer              :: is, ie, js, je
 
     Dt_cpl = Dt_cpl_in
@@ -92,6 +97,11 @@ contains
     allocate( ocean_ice_boundary%sea_level(is:ie,js:je) )
     allocate( ocean_ice_boundary%calving(is:ie,js:je) )
     allocate( ocean_ice_boundary%calving_hflx(is:ie,js:je) )
+    if (trim(calve_ice_shelf_bergs) == 'BONDED' .or. trim(calve_ice_shelf_bergs) == 'MIXED') then
+      allocate( ocean_ice_boundary%tabular_calve_mask(is:ie,js:je) )
+      allocate( ocean_ice_boundary%mass_shelf(is:ie,js:je) )
+      allocate( ocean_ice_boundary%area_shelf_h(is:ie,js:je) )
+    endif
     ! initialize boundary fields for override experiments (mjh)
     ocean_ice_boundary%u=0.0
     ocean_ice_boundary%v=0.0
@@ -101,6 +111,9 @@ contains
     ocean_ice_boundary%sea_level=0.0
     ocean_ice_boundary%calving=0.0
     ocean_ice_boundary%calving_hflx=0.0
+    if (associated(ocean_ice_boundary%tabular_calve_mask)) ocean_ice_boundary%tabular_calve_mask=0
+    if (associated(ocean_ice_boundary%mass_shelf)) ocean_ice_boundary%mass_shelf=0.0
+    if (associated(ocean_ice_boundary%area_shelf_h)) ocean_ice_boundary%area_shelf_h=0.0
 
     ! allocate fields for extra tracers in ocean_ice_boundary
     if (.not.fms_coupler_type_initialized(ocean_ice_boundary%fields)) &
@@ -154,6 +167,12 @@ contains
     endif
     if (associated(Ice%mass_berg)) then
       allocate( ice_ocean_boundary%mass_berg  (is:ie,js:je) ) ;     ice_ocean_boundary%mass_berg = 0.0
+    endif
+    if (associated(Ice%frac_cberg)) then
+      allocate( ice_ocean_boundary%frac_cberg  (is:ie,js:je) ) ;     ice_ocean_boundary%frac_cberg = 0.0
+    endif
+    if (associated(Ice%frac_cberg_calved)) then
+      allocate( ice_ocean_boundary%frac_cberg_calved(is:ie,js:je) ) ; ice_ocean_boundary%frac_cberg_calved = 0.0
     endif
     ! Copy the stagger indication variables from the ice processors the ocean
     ! PEs and vice versa.  The defaults are large negative numbers, so the
@@ -308,6 +327,12 @@ contains
     if(ASSOCIATED(Ice_Ocean_Boundary%mass_berg) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%mass_berg, Ice_Ocean_Boundary%mass_berg, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
+    if(ASSOCIATED(Ice_Ocean_Boundary%frac_cberg) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+         Ice%frac_cberg, Ice_Ocean_Boundary%frac_cberg, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
+    if(ASSOCIATED(Ice_Ocean_Boundary%frac_cberg_calved) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+         Ice%frac_cberg_calved, Ice_Ocean_Boundary%frac_cberg_calved, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
     if(ASSOCIATED(Ice_Ocean_Boundary%runoff_hflx) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%runoff_hflx, Ice_Ocean_Boundary%runoff_hflx, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
@@ -316,6 +341,12 @@ contains
 
     if(ASSOCIATED(Ice_Ocean_Boundary%q_flux) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%flux_q, Ice_Ocean_Boundary%q_flux, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
+    if(ASSOCIATED(Ice_Ocean_Boundary%frac_cberg) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+         Ice%frac_cberg, Ice_Ocean_Boundary%frac_cberg, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
+    if(ASSOCIATED(Ice_Ocean_Boundary%frac_cberg_calved) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+         Ice%frac_cberg_calved, Ice_Ocean_Boundary%frac_cberg_calved, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
     call fms_mpp_clock_end(fluxIceOceanClock)
     call fms_mpp_clock_end(cplOcnClock)
@@ -357,6 +388,10 @@ contains
       call fms_data_override('OCN', 'area_berg',  Ice_Ocean_Boundary%area_berg , Time )
     if (ASSOCIATED(Ice_Ocean_Boundary%mass_berg)  ) &
       call fms_data_override('OCN', 'mass_berg',  Ice_Ocean_Boundary%mass_berg , Time )
+    if (ASSOCIATED(Ice_Ocean_Boundary%frac_cberg)  ) &
+      call fms_data_override('OCN', 'frac_cberg',  Ice_Ocean_Boundary%frac_cberg , Time )
+    if (ASSOCIATED(Ice_Ocean_Boundary%frac_cberg_calved)  ) &
+      call fms_data_override('OCN', 'frac_cberg_calved',  Ice_Ocean_Boundary%frac_cberg_calved , Time )
 
     ! Extra fluxes
     call fms_coupler_type_data_override('OCN', Ice_Ocean_Boundary%fluxes, Time )
@@ -377,8 +412,11 @@ contains
   !!        v_surf = meridional ocean current/ice motion (m/s)
   !!        v_surf = meridional ocean current/ice motion (m/s)
   !!        sea_lev = sea level used to drive ice accelerations (m)
-  !!        calving = ice-sheet calving flux to ocean (kg/m2/s)
-  !!        calving_hflx = heat flux associated with ice-sheet calving (W/m2)
+  !!        calving = ice-sheet calving to point icebergs: flux to ocean (kg/m2/s)
+  !!        calving_hflx = heat flux associated with ice-sheet calving to point icebergs (W/m2)
+  !!        tabular_calve_mask = mask for calving of tabular bonded bergs [nondim]
+  !!        mass_shelf = the ice shelf mass field per ice shelf area, used for calving of tabular bonded bergs [kg m-2]
+  !!        area_shelf_h = the area in the grid cell covered by the ice shelf, for calving tabular bonded bergs [m2]
   !! </pre>
   !!
   !! \throw FATAL, "Ocean_Ice_Boundary%xtype must be DIRECT or REDIST."
@@ -428,6 +466,24 @@ contains
              call divide_by_area(data=Ocean_Ice_Boundary%calving_hflx, area=Ice%area)
           else
              Ocean_Ice_Boundary%calving_hflx = Ocean%calving_hflx
+          endif
+       endif
+
+       if( ASSOCIATED(Ocean_Ice_Boundary%tabular_calve_mask) )Ocean_Ice_Boundary%tabular_calve_mask = Ocean%tabular_calve_mask
+       if( ASSOCIATED(Ocean_Ice_Boundary%mass_shelf) ) then
+          if(do_area_weighted_flux) then
+             Ocean_Ice_Boundary%mass_shelf = Ocean%mass_shelf * Ocean%area
+             call divide_by_area(data=Ocean_Ice_Boundary%mass_shelf, area=Ice%area)
+           else
+             Ocean_Ice_Boundary%mass_shelf = Ocean%mass_shelf
+          endif
+       endif
+       if( ASSOCIATED(Ocean_Ice_Boundary%area_shelf_h) ) then
+          if(do_area_weighted_flux) then
+             Ocean_Ice_Boundary%area_shelf_h = Ocean%area_shelf_h * Ocean%area
+             call divide_by_area(data=Ocean_Ice_Boundary%area_shelf_h, area=Ice%area)
+          else
+             Ocean_Ice_Boundary%area_shelf_h = Ocean%area_shelf_h
           endif
        endif
 
@@ -490,6 +546,37 @@ contains
              if (Ocean%is_ocean_pe) deallocate(tmp)
           else
              call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving_hflx, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving_hflx)
+          endif
+       endif
+
+       if( ASSOCIATED(Ocean_Ice_Boundary%tabular_calve_mask) )            &
+         call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%tabular_calve_mask, Ice%slow_Domain_NH, Ocean_Ice_Boundary%tabular_calve_mask)
+       if( ASSOCIATED(Ocean_Ice_Boundary%mass_shelf) ) then
+          if(do_area_weighted_flux) then
+             if (Ocean%is_ocean_pe) then
+               allocate(tmp(size(Ocean%area,1), size(Ocean%area,2)))
+               tmp(:,:) = Ocean%mass_shelf(:,:) * Ocean%area(:,:)
+             endif
+             call fms_mpp_domains_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, Ocean_Ice_Boundary%mass_shelf)
+             if (Ice%slow_ice_pe) &
+               call divide_by_area(data=Ocean_Ice_Boundary%mass_shelf, area=Ice%area)
+             if (Ocean%is_ocean_pe) deallocate(tmp)
+          else
+             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%mass_shelf, Ice%slow_Domain_NH, Ocean_Ice_Boundary%mass_shelf)
+          endif
+       endif
+       if( ASSOCIATED(Ocean_Ice_Boundary%area_shelf_h) ) then
+          if(do_area_weighted_flux) then
+             if (Ocean%is_ocean_pe) then
+               allocate(tmp(size(Ocean%area,1), size(Ocean%area,2)))
+               tmp(:,:) = Ocean%area_shelf_h(:,:) * Ocean%area(:,:)
+             endif
+             call fms_mpp_domains_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, Ocean_Ice_Boundary%area_shelf_h)
+             if (Ice%slow_ice_pe) &
+               call divide_by_area(data=Ocean_Ice_Boundary%area_shelf_h, area=Ice%area)
+             if (Ocean%is_ocean_pe) deallocate(tmp)
+          else
+             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%area_shelf_h, Ice%slow_Domain_NH, Ocean_Ice_Boundary%area_shelf_h)
           endif
        endif
 

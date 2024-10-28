@@ -281,9 +281,11 @@
 !!     <td>calve_ice_shelf_bergs</td>
 !!     <td>logical</td>
 !!     <td>.FALSE.</td>
-!!      <td> If true, the ice sheet flux through a fixed ice-shelf front is
-!!           converted to icebergs, rather than initializing icebergs from frozen
-!!           freshwater discharge.</td>
+!!     <td>If 'POINT', convert ice shelf flux through
+!!       a static ice shelf front into point-particle icebergs. If 'BONDED',
+!!       convert ice shelf into bonded-particle tabular bergs where tabular
+!!       calving mask exceeds zero. If 'MIXED', use 'POINT' for N Hemisphere
+!!       and 'BONDED' for S Hemisphere. If 'NONE', no calving.</td>
 !!   </tr>
 !!   <tr>
 !!     <td>restart_interval</td>
@@ -459,7 +461,7 @@ program coupler_main
       if (concurrent_ice) then
         !> This call occurs all ice PEs.
         call coupler_exchange_fast_to_slow_ice(Ice, coupler_clocks)
-        if (Ice%slow_ice_pe .and. calve_ice_shelf_bergs) &
+        if (Ice%slow_ice_pe .and. (trim(calve_ice_shelf_bergs) /= 'NONE')) &
           call coupler_unpack_ocean_ice_boundary_calved_ice_shelf_bergs(Ice, Ocean_ice_boundary, coupler_clocks)
       endif
 
@@ -620,7 +622,7 @@ program coupler_main
       !> This could be a point where the model is serialized; This calls on all ice PEs
       if (.not.concurrent_ice) then
         call coupler_exchange_fast_to_slow_ice(Ice, coupler_clocks, set_ice_current_pelist=.True.)
-        if (Ice%slow_ice_pe .and. calve_ice_shelf_bergs) &
+        if (Ice%slow_ice_pe .and. (trim(calve_ice_shelf_bergs) /= 'NONE')) &
           call coupler_unpack_ocean_ice_boundary_calved_ice_shelf_bergs(Ice, Ocean_ice_boundary, coupler_clocks)
       endif
       !> slow-ice model

@@ -221,9 +221,11 @@ module full_coupler_mod
   logical, public :: do_debug=.FALSE.!< If .TRUE. print additional debugging messages.
   integer, public :: check_stocks = 0 !< -1: never 0: at end of run only n>0: every n coupled steps
   logical, public :: use_hyper_thread = .false.
-  logical, public :: calve_ice_shelf_bergs = .false. !< If true, the ice sheet flux through a fixed ice-shelf front is
-                                                     !! converted to icebergs, rather than initializing icebergs from
-                                                     !! frozen freshwater discharge
+  character(len=6), public :: calve_ice_shelf_bergs = 'NONE' !< If 'POINT', convert ice shelf flux through
+                                              !! a static ice shelf front into point-particle icebergs. If 'BONDED',
+                                              !! convert ice shelf into bonded-particle tabular bergs where tabular
+                                              !! calving mask exceeds zero. If 'MIXED', use 'POINT' for N Hemisphere
+                                              !! and 'BONDED' for S Hemisphere. If 'NONE', no calving.
 
   namelist /coupler_nml/ current_date, calendar, force_date_from_namelist,         &
                          months, days, hours, minutes, seconds, dt_cpld, dt_atmos, &
@@ -1057,7 +1059,7 @@ contains
     if(do_flux) call flux_exchange_init ( Time, Atm, Land, Ice, Ocean, Ocean_state,&
              atmos_ice_boundary, land_ice_atmos_boundary, &
              land_ice_boundary, ice_ocean_boundary, ocean_ice_boundary, &
-         do_ocean, slow_ice_ocean_pelist, dt_atmos=dt_atmos, dt_cpld=dt_cpld)
+         do_ocean, slow_ice_ocean_pelist, calve_ice_shelf_bergs, dt_atmos=dt_atmos, dt_cpld=dt_cpld)
     call fms_mpp_set_current_pelist(ensemble_pelist(ensemble_id,:))
     call fms_mpp_clock_end(coupler_clocks%flux_exchange_init)
 

@@ -217,7 +217,8 @@
 !!   - FROM the ice boundary TO the ocean boundary (in flux_ice_to_ocean):
 !!
 !!        u_flux, v_flux, t_flux, q_flux, salt_flux, lw_flux, sw_flux,
-!!        lprec, fprec, runoff, calving, p, ustar_berg, area_berg, mass_berg
+!!        lprec, fprec, runoff, calving, p, ustar_berg, area_berg, mass_berg,
+!!        frac_cberg, frac_cberg_calved
 !!
 !!   - FROM the ocean boundary TO the ice boundary (in flux_ocean_to_ice):
 !!
@@ -650,7 +651,7 @@ contains
   subroutine flux_exchange_init ( Time, Atm, Land, Ice, Ocean, Ocean_state,&
        atmos_ice_boundary, land_ice_atmos_boundary, &
        land_ice_boundary, ice_ocean_boundary, ocean_ice_boundary, &
-       do_ocean, slow_ice_ocean_pelist, dt_atmos, dt_cpld )
+       do_ocean, slow_ice_ocean_pelist, calve_ice_shelf_bergs, dt_atmos, dt_cpld )
 
     type(FmsTime_type),                   intent(in)     :: Time !< The model's current time
     type(atmos_data_type),             intent(inout)  :: Atm !< A derived data type to specify atmosphere boundary data
@@ -677,6 +678,11 @@ contains
     integer, dimension(:),             intent(in)    :: slow_ice_ocean_pelist
     integer, optional,                 intent(in)    :: dt_atmos !< Atmosphere time step in seconds
     integer, optional,                 intent(in)    :: dt_cpld !< Coupled time step in seconds
+    character(len=*), intent(in) :: calve_ice_shelf_bergs !< If 'POINT', convert ice shelf flux through
+                                              !! a static ice shelf front into point-particle icebergs. If 'BONDED',
+                                              !! convert ice shelf into bonded-particle tabular bergs where tabular
+                                              !! calving mask exceeds zero. If 'MIXED', use 'POINT' for N Hemisphere
+                                              !! and 'BONDED' for S Hemisphere. If 'NONE', no calving.
 
     character(len=64),  parameter   :: grid_file = 'INPUT/grid_spec.nc'
     integer        :: ierr, io
@@ -751,7 +757,8 @@ contains
 
     call fms_mpp_set_current_pelist()
     call ice_ocean_flux_exchange_init(Time, Ice, Ocean, Ocean_state,ice_ocean_boundary, ocean_ice_boundary, &
-         Dt_cpl, debug_stocks, do_area_weighted_flux, ex_gas_fields_ice, ex_gas_fluxes, do_ocean, slow_ice_ocean_pelist)
+         Dt_cpl, debug_stocks, do_area_weighted_flux, ex_gas_fields_ice, ex_gas_fluxes, do_ocean, slow_ice_ocean_pelist, &
+         calve_ice_shelf_bergs)
 
     !---- done ----
     do_init = .false.
