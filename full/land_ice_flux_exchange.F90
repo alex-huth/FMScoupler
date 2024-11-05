@@ -35,19 +35,23 @@ module land_ice_flux_exchange_mod
   !---- exchange grid maps -----
 
   type(FmsXgridXmap_type), save :: xmap_runoff
+  type(FmsXgridXmap_type), save :: xmap_IS
   integer         :: n_xgrid_runoff=0
+  integer         :: n_xgrid_IS=0
 
   ! Exchange grid indices
   integer :: X2_GRID_LND, X2_GRID_ICE
+  integer :: X2_IS_GRID_LND, X2_IS_GRID_ICE
 
   public :: flux_land_to_ice, land_ice_flux_exchange_init
 
   integer :: cplClock, fluxLandIceClock
-  logical :: do_runoff
+  logical :: do_runoff, do_IS
   real    :: Dt_cpl
 contains
 
-  subroutine land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl_in, do_runoff_in, cplClock_in)
+  subroutine land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl_in, do_runoff_in, cplClock_in, &
+        ice_sheet_enabled)
     type(land_data_type),         intent(in)    :: Land !< A derived data type to specify land boundary data
     type(ice_data_type),          intent(inout) :: Ice !< A derived data type to specify ice boundary data
     type(land_ice_boundary_type), intent(inout) :: land_ice_boundary !< A derived data type to specify properties
@@ -55,12 +59,31 @@ contains
     real,                         intent(in)    :: Dt_cpl_in
     logical,                      intent(in)    :: do_runoff_in
     integer,                      intent(in)    :: cplClock_in
+    logical, optional,            intent(in)    :: ice_sheet_enabled
 
     integer :: is, ie, js, je
 
     do_runoff = do_runoff_in
     cplClock = cplClock_in
     Dt_cpl   = Dt_cpl_in
+
+    do_IS = .false.
+
+    n_xgrid_IS=1
+    if (PRESENT(ice_sheet_enabled)) then
+       do_IS = ice_sheet_enabled
+       if (do_IS) then
+         call fms_xgrid_setup_xmap(xmap_IS, (/ 'LND', 'OCN' /),       &
+            (/ Land%Domain, Ice%Domain /),                    &
+            "INPUT_lndXIS/grid_spec.nc", input_dir='INPUT_lndXIS/')
+         ! exchange grid indices
+         X2_IS_GRID_LND = 1; X2_IS_GRID_ICE = 2;
+         n_xgrid_IS = max(fms_xgrid_count(xmap_IS),1)
+         if (n_xgrid_IS.eq.1) write (*,'(a,i6,6x,a)') 'PE = ', fms_mpp_pe(), 'Ice sheet  exchange size equals one.'
+         if (n_xgrid_IS>1) write (*,'(a,i6,6x,a,i6)') 'PE = ', fms_mpp_pe(), 'Ice sheet  exchange grid size= ',n_xgrid_IS
+       endif
+    endif
+
     fluxLandIceClock = fms_mpp_clock_id( 'Flux land to ice', flags=fms_clock_flag_default, grain=CLOCK_ROUTINE )
 
     if (do_runoff) then
@@ -80,6 +103,15 @@ contains
     allocate( land_ice_boundary%calving(is:ie,js:je) )
     allocate( land_ice_boundary%runoff_hflx(is:ie,js:je) )
     allocate( land_ice_boundary%calving_hflx(is:ie,js:je) )
+
+    if (do_IS) then
+       land_ice_boundary%do_IS = do_IS
+       allocate( land_ice_boundary%IS_adot_sg(is:ie,js:je) )
+       land_ice_boundary%IS_adot_sg=0.0
+       allocate( land_ice_boundary%IS_mask_sg(is:ie,js:je) )
+       land_ice_boundary%IS_mask_sg=0.0
+    endif
+
     ! initialize values for override experiments (mjh)
     land_ice_boundary%runoff=0.0
     land_ice_boundary%calving=0.0
@@ -110,6 +142,7 @@ contains
 
     integer                         :: ier
     real, dimension(n_xgrid_runoff) :: ex_runoff, ex_calving, ex_runoff_hflx, ex_calving_hflx
+    real, dimension(n_xgrid_IS)     :: ex_adot
     real, dimension(size(Land_Ice_Boundary%runoff,1),size(Land_Ice_Boundary%runoff,2),1) :: ice_buf
 
     !Balaji
@@ -153,6 +186,13 @@ contains
        Land_Ice_Boundary%calving = 0.0
        Land_Ice_Boundary%runoff_hflx = 0.0
        Land_Ice_Boundary%calving_hflx = 0.0
+    endif
+
+    if (do_IS) then
+       call fms_xgrid_put_to_xgrid ( Land%IS_adot_sg,      'LND', ex_adot,  xmap_IS)
+       call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot,  xmap_IS)
+       Land_Ice_Boundary%IS_adot_sg = ice_buf(:,:,1)
+       call fms_data_override('ICE', 'IS_adot' , Land_Ice_Boundary%IS_adot_sg , Time)
     endif
 
     call fms_mpp_clock_end(fluxLandIceClock)

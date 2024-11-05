@@ -57,7 +57,7 @@ contains
   subroutine ice_ocean_flux_exchange_init(Time, Ice, Ocean, Ocean_state, ice_ocean_boundary, &
                                           ocean_ice_boundary, Dt_cpl_in, debug_stocks_in,    &
                                           do_area_weighted_flux_in, ex_gas_fields_ice, ex_gas_fluxes, &
-                                          do_ocean, slow_ice_ocean_pelist_in )
+                                          do_ocean, slow_ice_ocean_pelist_in, ice_sheet_enabled)
 
     type(FmsTime_type),               intent(in)    :: Time !< The model's current time
     type(ice_data_type),           intent(inout) :: Ice !< A derived data type to specify ice boundary data
@@ -73,11 +73,16 @@ contains
     type(FmsCoupler1dBC_type),  intent(in)    :: ex_gas_fields_ice, ex_gas_fluxes
     logical,                       intent(in)    :: do_ocean
     integer, dimension(:),         intent(in)    :: slow_ice_ocean_pelist_in
+    logical, optional,             intent(in)    :: ice_sheet_enabled
     integer              :: is, ie, js, je
+    logical              :: do_IS
 
     Dt_cpl = Dt_cpl_in
     debug_stocks = debug_stocks_in
     do_area_weighted_flux = do_area_weighted_flux_in
+
+    do_IS=.false.
+    if (present(ice_sheet_enabled)) do_IS=ice_sheet_enabled
 
     !ocean_ice_boundary and ice_ocean_boundary must be done on all PES
     !domain boundaries will assure no space is allocated on non-relevant PEs.
@@ -145,6 +150,10 @@ contains
     allocate( ice_ocean_boundary%calving_hflx  (is:ie,js:je) ) ;    ice_ocean_boundary%calving_hflx = 0.0
     allocate( ice_ocean_boundary%p        (is:ie,js:je) ) ;         ice_ocean_boundary%p = 0.0
     allocate( ice_ocean_boundary%mi       (is:ie,js:je) ) ;         ice_ocean_boundary%mi = 0.0
+    if (do_IS) then
+      allocate( ice_ocean_boundary%shelf_sfc_mass_flux (is:ie,js:je) )
+      ice_ocean_boundary%shelf_sfc_mass_flux = 0.0
+    endif
     !Allocating iceberg fields, if the corresponding fields are assosiated in the sea ice model(s)
     if (associated(Ice%ustar_berg)) then
       allocate( ice_ocean_boundary%ustar_berg (is:ie,js:je) ) ;     ice_ocean_boundary%ustar_berg = 0.0
@@ -298,6 +307,9 @@ contains
 
     if(ASSOCIATED(Ice_Ocean_Boundary%calving) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%calving, Ice_Ocean_Boundary%calving, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
+    if(ASSOCIATED(Ice_Ocean_Boundary%shelf_sfc_mass_flux) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+         Ice%adot, Ice_Ocean_Boundary%shelf_sfc_mass_flux, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
     if(ASSOCIATED(Ice_Ocean_Boundary%ustar_berg) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
        Ice%ustar_berg, Ice_Ocean_Boundary%ustar_berg, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )

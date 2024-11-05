@@ -559,6 +559,7 @@ module flux_exchange_mod
   logical :: divert_stocks_report = .FALSE.
   logical :: do_runoff = .TRUE. !< Turns on/off the land runoff interpolation to the ocean
   logical :: do_forecast = .false.
+  logical, save :: ice_sheet_enabled = .false.
   integer :: nblocks = 1
 
   logical :: partition_fprec_from_lprec = .FALSE.  !< option for ATM override experiments where liquid+frozen precip are
@@ -569,7 +570,7 @@ module flux_exchange_mod
 
   namelist /flux_exchange_nml/ z_ref_heat, z_ref_mom,&
        & do_area_weighted_flux, debug_stocks, divert_stocks_report, do_runoff, do_forecast, nblocks,&
-       & partition_fprec_from_lprec, scale_precip_2d
+       & partition_fprec_from_lprec, scale_precip_2d, ice_sheet_enabled
 
   logical :: gas_fluxes_initialized = .false.  ! This is set to true when the following types are initialized.
   type(FmsCoupler1dBC_type), target :: ex_gas_fields_atm  ! gas fields in atm
@@ -683,6 +684,7 @@ contains
     integer        :: logunit, unit
     character(len=256) :: errmsg
     integer              :: omp_get_num_threads, nthreads
+    logical        :: do_IS
 
     !-----------------------------------------------------------------------
 
@@ -736,6 +738,9 @@ contains
 
     call fms_xgrid_get_ocean_model_area_elements(Ocean%domain, grid_file)
 
+    do_IS=.false.
+    if (associated(Land%IS_adot_sg)) do_IS=.true.
+
     if( Atm%pe )then
        call fms_mpp_set_current_pelist(Atm%pelist)
        cplClock = fms_mpp_clock_id( 'Land-ice-atm coupler', flags=fms_clock_flag_default, grain=CLOCK_COMPONENT )
@@ -746,12 +751,13 @@ contains
             partition_fprec_from_lprec, scale_precip_2d, nblocks, cplClock, &
             ex_gas_fields_atm, ex_gas_fields_ice, ex_gas_fluxes)
 
-       call land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl, do_runoff, cplClock)
+       call land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl, do_runoff, cplClock, do_IS)
     end if
 
     call fms_mpp_set_current_pelist()
     call ice_ocean_flux_exchange_init(Time, Ice, Ocean, Ocean_state,ice_ocean_boundary, ocean_ice_boundary, &
-         Dt_cpl, debug_stocks, do_area_weighted_flux, ex_gas_fields_ice, ex_gas_fluxes, do_ocean, slow_ice_ocean_pelist)
+         Dt_cpl, debug_stocks, do_area_weighted_flux, ex_gas_fields_ice, ex_gas_fluxes, do_ocean, slow_ice_ocean_pelist, &
+         ice_sheet_enabled=do_IS)
 
     !---- done ----
     do_init = .false.
