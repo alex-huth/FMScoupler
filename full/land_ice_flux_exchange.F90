@@ -46,7 +46,7 @@ module land_ice_flux_exchange_mod
   public :: flux_land_to_ice, land_ice_flux_exchange_init
 
   integer :: cplClock, fluxLandIceClock
-  logical :: do_runoff, do_IS
+  logical, save :: do_runoff, do_IS
   real    :: Dt_cpl
 contains
 

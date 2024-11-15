@@ -224,6 +224,7 @@ module full_coupler_mod
   logical, public :: calve_ice_shelf_bergs = .false. !< If true, the ice sheet flux through a fixed ice-shelf front is
                                                      !! converted to icebergs, rather than initializing icebergs from
                                                      !! frozen freshwater discharge
+  logical, public :: ice_sheet_enabled = .false. !< If true, the surface mass flux is passed from land through coupler 
 
   namelist /coupler_nml/ current_date, calendar, force_date_from_namelist,         &
                          months, days, hours, minutes, seconds, dt_cpld, dt_atmos, &
@@ -234,7 +235,7 @@ module full_coupler_mod
                          check_stocks, restart_interval, do_debug, do_chksum,      &
                          use_hyper_thread, concurrent_ice, slow_ice_with_ocean,    &
                          do_endpoint_chksum, combined_ice_and_ocean,               &
-                         calve_ice_shelf_bergs
+                         calve_ice_shelf_bergs, ice_sheet_enabled
 
   !> coupler_clock_type derived type consist of all clock ids that will be set and used
   !! in full coupler_main.
@@ -934,7 +935,7 @@ contains
 
       call fms_mpp_clock_begin(coupler_clocks%land_model_init)
       call land_model_init( Atmos_land_boundary, Land, Time_init, Time, &
-                            Time_step_atmos, Time_step_cpld )
+                            Time_step_atmos, Time_step_cpld, ice_sheet_enabled=ice_sheet_enabled )
       call fms_mpp_clock_end(coupler_clocks%land_model_init)
 
       if (fms_mpp_pe().EQ.fms_mpp_root_pe()) then
@@ -967,7 +968,8 @@ contains
       call ice_model_init(Ice, Time_init, Time, Time_step_atmos, &
                            Time_step_cpld, Verona_coupler=.false., &
                           concurrent_ice=concurrent_ice, &
-                          gas_fluxes=gas_fluxes, gas_fields_ocn=gas_fields_ocn )
+                          gas_fluxes=gas_fluxes, gas_fields_ocn=gas_fields_ocn, &
+                          ice_sheet_enabled=ice_sheet_enabled)
       call fms_mpp_clock_end(coupler_clocks%ice_model_init)
 
       ! This must be called using the union of the ice PE_lists.
@@ -1057,7 +1059,8 @@ contains
     if(do_flux) call flux_exchange_init ( Time, Atm, Land, Ice, Ocean, Ocean_state,&
              atmos_ice_boundary, land_ice_atmos_boundary, &
              land_ice_boundary, ice_ocean_boundary, ocean_ice_boundary, &
-         do_ocean, slow_ice_ocean_pelist, dt_atmos=dt_atmos, dt_cpld=dt_cpld)
+             do_ocean, slow_ice_ocean_pelist, dt_atmos=dt_atmos, dt_cpld=dt_cpld, &
+             ice_sheet_enabled=ice_sheet_enabled)
     call fms_mpp_set_current_pelist(ensemble_pelist(ensemble_id,:))
     call fms_mpp_clock_end(coupler_clocks%flux_exchange_init)
 

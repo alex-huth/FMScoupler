@@ -559,7 +559,6 @@ module flux_exchange_mod
   logical :: divert_stocks_report = .FALSE.
   logical :: do_runoff = .TRUE. !< Turns on/off the land runoff interpolation to the ocean
   logical :: do_forecast = .false.
-  logical, save :: ice_sheet_enabled = .false.
   integer :: nblocks = 1
 
   logical :: partition_fprec_from_lprec = .FALSE.  !< option for ATM override experiments where liquid+frozen precip are
@@ -570,7 +569,7 @@ module flux_exchange_mod
 
   namelist /flux_exchange_nml/ z_ref_heat, z_ref_mom,&
        & do_area_weighted_flux, debug_stocks, divert_stocks_report, do_runoff, do_forecast, nblocks,&
-       & partition_fprec_from_lprec, scale_precip_2d, ice_sheet_enabled
+       & partition_fprec_from_lprec, scale_precip_2d
 
   logical :: gas_fluxes_initialized = .false.  ! This is set to true when the following types are initialized.
   type(FmsCoupler1dBC_type), target :: ex_gas_fields_atm  ! gas fields in atm
@@ -651,7 +650,7 @@ contains
   subroutine flux_exchange_init ( Time, Atm, Land, Ice, Ocean, Ocean_state,&
        atmos_ice_boundary, land_ice_atmos_boundary, &
        land_ice_boundary, ice_ocean_boundary, ocean_ice_boundary, &
-       do_ocean, slow_ice_ocean_pelist, dt_atmos, dt_cpld )
+       do_ocean, slow_ice_ocean_pelist, dt_atmos, dt_cpld, ice_sheet_enabled )
 
     type(FmsTime_type),                   intent(in)     :: Time !< The model's current time
     type(atmos_data_type),             intent(inout)  :: Atm !< A derived data type to specify atmosphere boundary data
@@ -678,6 +677,7 @@ contains
     integer, dimension(:),             intent(in)    :: slow_ice_ocean_pelist
     integer, optional,                 intent(in)    :: dt_atmos !< Atmosphere time step in seconds
     integer, optional,                 intent(in)    :: dt_cpld !< Coupled time step in seconds
+    logical, optional,                 intent(in)    :: ice_sheet_enabled
 
     character(len=64),  parameter   :: grid_file = 'INPUT/grid_spec.nc'
     integer        :: ierr, io
@@ -739,7 +739,7 @@ contains
     call fms_xgrid_get_ocean_model_area_elements(Ocean%domain, grid_file)
 
     do_IS=.false.
-    if (associated(Land%IS_adot_sg)) do_IS=.true.
+    if (present(ice_sheet_enabled)) do_IS=ice_sheet_enabled
 
     if( Atm%pe )then
        call fms_mpp_set_current_pelist(Atm%pelist)
@@ -751,10 +751,12 @@ contains
             partition_fprec_from_lprec, scale_precip_2d, nblocks, cplClock, &
             ex_gas_fields_atm, ex_gas_fields_ice, ex_gas_fluxes)
 
-       call land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl, do_runoff, cplClock, do_IS)
+       call land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl, do_runoff, cplClock, ice_sheet_enabled=do_IS)
     end if
 
     call fms_mpp_set_current_pelist()
+    do_IS=.false.
+    if (associated(Land%IS_adot_sg)) do_IS=.true.
     call ice_ocean_flux_exchange_init(Time, Ice, Ocean, Ocean_state,ice_ocean_boundary, ocean_ice_boundary, &
          Dt_cpl, debug_stocks, do_area_weighted_flux, ex_gas_fields_ice, ex_gas_fluxes, do_ocean, slow_ice_ocean_pelist, &
          ice_sheet_enabled=do_IS)
