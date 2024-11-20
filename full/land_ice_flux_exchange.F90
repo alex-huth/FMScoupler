@@ -69,6 +69,8 @@ contains
 
     do_IS = .false.
 
+    fluxLandIceClock = fms_mpp_clock_id( 'Flux land to ice', flags=fms_clock_flag_default, grain=CLOCK_ROUTINE )
+
     n_xgrid_IS=1
     if (PRESENT(ice_sheet_enabled)) then
        do_IS = ice_sheet_enabled
@@ -83,8 +85,6 @@ contains
          if (n_xgrid_IS>1) write (*,'(a,i6,6x,a,i6)') 'PE = ', fms_mpp_pe(), 'Ice sheet  exchange grid size= ',n_xgrid_IS
        endif
     endif
-
-    fluxLandIceClock = fms_mpp_clock_id( 'Flux land to ice', flags=fms_clock_flag_default, grain=CLOCK_ROUTINE )
 
     if (do_runoff) then
        call fms_xgrid_setup_xmap(xmap_runoff, (/ 'LND', 'OCN' /),       &
