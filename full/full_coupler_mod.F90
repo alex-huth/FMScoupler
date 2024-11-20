@@ -1067,7 +1067,7 @@ contains
     call fms_mpp_set_current_pelist()
     if (fms_mpp_pe().EQ.fms_mpp_root_pe()) then
       call DATE_AND_TIME(walldate, walltime, wallzone, wallvalues)
-      write(errunit,*) 'Finsihed initializing flux_exchange at '&
+      write(errunit,*) 'Finished initializing flux_exchange at '&
                        //trim(walldate)//' '//trim(walltime)
     endif
 
