@@ -68,22 +68,20 @@ contains
     Dt_cpl   = Dt_cpl_in
 
     do_IS = .false.
+    if (PRESENT(ice_sheet_enabled)) do_IS = ice_sheet_enabled
 
     fluxLandIceClock = fms_mpp_clock_id( 'Flux land to ice', flags=fms_clock_flag_default, grain=CLOCK_ROUTINE )
 
     n_xgrid_IS=1
-    if (PRESENT(ice_sheet_enabled)) then
-       do_IS = ice_sheet_enabled
-       if (do_IS) then
-         call fms_xgrid_setup_xmap(xmap_IS, (/ 'LND', 'OCN' /),       &
-            (/ Land%Domain, Ice%Domain /),                    &
-            "INPUT_lndXIS/grid_spec.nc", input_dir='INPUT_lndXIS/')
-         ! exchange grid indices
-         X2_IS_GRID_LND = 1; X2_IS_GRID_ICE = 2;
-         n_xgrid_IS = max(fms_xgrid_count(xmap_IS),1)
-         if (n_xgrid_IS.eq.1) write (*,'(a,i6,6x,a)') 'PE = ', fms_mpp_pe(), 'Ice sheet  exchange size equals one.'
-         if (n_xgrid_IS>1) write (*,'(a,i6,6x,a,i6)') 'PE = ', fms_mpp_pe(), 'Ice sheet  exchange grid size= ',n_xgrid_IS
-       endif
+    if (do_IS) then
+       call fms_xgrid_setup_xmap(xmap_IS, (/ 'LND', 'OCN' /),       &
+          (/ Land%Domain, Ice%Domain /),                    &
+          "INPUT_lndXIS/grid_spec.nc", input_dir='INPUT_lndXIS/')
+       ! exchange grid indices
+       X2_IS_GRID_LND = 1; X2_IS_GRID_ICE = 2;
+       n_xgrid_IS = max(fms_xgrid_count(xmap_IS),1)
+       if (n_xgrid_IS.eq.1) write (*,'(a,i6,6x,a)') 'PE = ', fms_mpp_pe(), 'Ice sheet  exchange size equals one.'
+       if (n_xgrid_IS>1) write (*,'(a,i6,6x,a,i6)') 'PE = ', fms_mpp_pe(), 'Ice sheet  exchange grid size= ',n_xgrid_IS
     endif
 
     if (do_runoff) then
@@ -137,8 +135,8 @@ contains
     type(land_data_type),           intent(in) :: Land !< A derived data type to specify land boundary data
     type(ice_data_type),            intent(in) :: Ice !< A derived data type to specify ice boundary data
     !real, dimension(:,:),         intent(out) :: runoff_ice, calving_ice
-    type(land_ice_boundary_type), intent(inout):: Land_Ice_Boundary !< A derived data type to specify properties and
-                                                                    !! fluxes passed from land to ice
+    type(land_ice_boundary_type), intent(inout):: Land_Ice_Boundary !< A derived data type to specify properties
+                                                                    !! and fluxes passed from land to ice
 
     integer                         :: ier
     real, dimension(n_xgrid_runoff) :: ex_runoff, ex_calving, ex_runoff_hflx, ex_calving_hflx

@@ -340,8 +340,8 @@ contains
   subroutine flux_ice_to_ocean_finish ( Time, Ice_Ocean_Boundary )
 
     type(FmsTime_type),                 intent(in)  :: Time !< Current time
-    type(ice_ocean_boundary_type), intent(inout) :: Ice_Ocean_Boundary !< A derived data type to specify properties and
-                                                         !! fluxes passed from ice to ocean
+    type(ice_ocean_boundary_type), intent(inout) :: Ice_Ocean_Boundary !< A derived data type to specify properties
+                                                         !! and fluxes passed from ice to ocean
 
     call fms_data_override('OCN', 'u_flux',    Ice_Ocean_Boundary%u_flux   , Time )
     call fms_data_override('OCN', 'v_flux',    Ice_Ocean_Boundary%v_flux   , Time )
@@ -399,8 +399,8 @@ contains
 
     type(ocean_public_type),         intent(in)  :: Ocean !< A derived data type to specify ocean boundary data
     type(ice_data_type),             intent(in)  :: Ice   !< A derived data type to specify ice boundary data
-    type(ocean_ice_boundary_type), intent(inout) :: Ocean_Ice_Boundary !< A derived data type to specify properties and
-                                                          !! fluxes passed from ocean to ice
+    type(ocean_ice_boundary_type), intent(inout) :: Ocean_Ice_Boundary !< A derived data type to specify properties
+                                                          !! and fluxes passed from ocean to ice
     real, allocatable, dimension(:,:) :: tmp
     integer       :: m
     integer       :: n
@@ -487,7 +487,8 @@ contains
                call divide_by_area(data=Ocean_Ice_Boundary%calving, area=Ice%area)
              if (Ocean%is_ocean_pe) deallocate(tmp)
           else
-             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving)
+             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving, Ice%slow_Domain_NH, &
+                Ocean_Ice_Boundary%calving)
           endif
        endif
        if( ASSOCIATED(Ocean_Ice_Boundary%calving_hflx) ) then
@@ -496,12 +497,14 @@ contains
                allocate(tmp(size(Ocean%area,1), size(Ocean%area,2)))
                tmp(:,:) = Ocean%calving_hflx(:,:) * Ocean%area(:,:)
              endif
-             call fms_mpp_domains_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving_hflx)
+             call fms_mpp_domains_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, &
+                Ocean_Ice_Boundary%calving_hflx)
              if (Ice%slow_ice_pe) &
                call divide_by_area(data=Ocean_Ice_Boundary%calving_hflx, area=Ice%area)
              if (Ocean%is_ocean_pe) deallocate(tmp)
           else
-             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving_hflx, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving_hflx)
+             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving_hflx, Ice%slow_Domain_NH, &
+                Ocean_Ice_Boundary%calving_hflx)
           endif
        endif
 
@@ -524,8 +527,8 @@ contains
 
     type(FmsTime_type),                 intent(in)  :: Time  !< Current time
     type(ice_data_type),             intent(in)  :: Ice   !< A derived data type to specify ice boundary data
-    type(ocean_ice_boundary_type), intent(inout) :: Ocean_Ice_Boundary !< A derived data type to specify properties and
-                                                          !! fluxes passed from ocean to ice
+    type(ocean_ice_boundary_type), intent(inout) :: Ocean_Ice_Boundary !< A derived data type to specify properties
+                                                          !! and fluxes passed from ocean to ice
     real          :: from_dq
 
     call fms_data_override('ICE', 'u',         Ocean_Ice_Boundary%u,         Time)

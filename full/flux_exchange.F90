@@ -751,15 +751,16 @@ contains
             partition_fprec_from_lprec, scale_precip_2d, nblocks, cplClock, &
             ex_gas_fields_atm, ex_gas_fields_ice, ex_gas_fluxes)
 
-       call land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl, do_runoff, cplClock, ice_sheet_enabled=do_IS)
+       call land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl, do_runoff, cplClock, &
+          ice_sheet_enabled=do_IS)
+       do_IS=.false.
+       if (associated(land_ice_boundary%IS_adot_sg)) do_IS=.true.
     end if
 
     call fms_mpp_set_current_pelist()
-    do_IS=.false.
-    if (associated(land_ice_boundary%IS_adot_sg)) do_IS=.true.
     call ice_ocean_flux_exchange_init(Time, Ice, Ocean, Ocean_state,ice_ocean_boundary, ocean_ice_boundary, &
-         Dt_cpl, debug_stocks, do_area_weighted_flux, ex_gas_fields_ice, ex_gas_fluxes, do_ocean, slow_ice_ocean_pelist, &
-         ice_sheet_enabled=do_IS)
+         Dt_cpl, debug_stocks, do_area_weighted_flux, ex_gas_fields_ice, ex_gas_fluxes, do_ocean, &
+         slow_ice_ocean_pelist, ice_sheet_enabled=do_IS)
 
     !---- done ----
     do_init = .false.
