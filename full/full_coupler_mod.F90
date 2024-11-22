@@ -224,7 +224,7 @@ module full_coupler_mod
   logical, public :: calve_ice_shelf_bergs = .false. !< If true, the ice sheet flux through a fixed ice-shelf front is
                                                      !! converted to icebergs, rather than initializing icebergs from
                                                      !! frozen freshwater discharge
-  logical, public :: ice_sheet_enabled = .false. !< If true, the surface mass flux is passed from land through coupler 
+  logical, public :: ice_sheet_enabled = .false. !< If true, the surface mass flux is passed from land through coupler
 
   namelist /coupler_nml/ current_date, calendar, force_date_from_namelist,         &
                          months, days, hours, minutes, seconds, dt_cpld, dt_atmos, &
@@ -935,7 +935,7 @@ contains
 
       call fms_mpp_clock_begin(coupler_clocks%land_model_init)
       call land_model_init( Atmos_land_boundary, Land, Time_init, Time, &
-                            Time_step_atmos, Time_step_cpld, & 
+                            Time_step_atmos, Time_step_cpld, &
                             ice_sheet_enabled=ice_sheet_enabled )
       call fms_mpp_clock_end(coupler_clocks%land_model_init)
 
@@ -1061,7 +1061,7 @@ contains
              atmos_ice_boundary, land_ice_atmos_boundary, &
              land_ice_boundary, ice_ocean_boundary, ocean_ice_boundary, &
              do_ocean, slow_ice_ocean_pelist, dt_atmos=dt_atmos, dt_cpld=dt_cpld, &
-             ice_sheet_enabled=ice_sheet_enabled)
+             calve_ice_shelf_bergs=calve_ice_shelf_bergs, ice_sheet_enabled=ice_sheet_enabled)
     call fms_mpp_set_current_pelist(ensemble_pelist(ensemble_id,:))
     call fms_mpp_clock_end(coupler_clocks%flux_exchange_init)
 

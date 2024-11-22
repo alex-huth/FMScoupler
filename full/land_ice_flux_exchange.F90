@@ -46,12 +46,12 @@ module land_ice_flux_exchange_mod
   public :: flux_land_to_ice, land_ice_flux_exchange_init
 
   integer :: cplClock, fluxLandIceClock
-  logical, save :: do_runoff, do_IS
+  logical, save :: do_runoff, do_IS, do_calve
   real    :: Dt_cpl
 contains
 
   subroutine land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl_in, do_runoff_in, cplClock_in, &
-        ice_sheet_enabled)
+        calve_ice_shelf_bergs, ice_sheet_enabled)
     type(land_data_type),         intent(in)    :: Land !< A derived data type to specify land boundary data
     type(ice_data_type),          intent(inout) :: Ice !< A derived data type to specify ice boundary data
     type(land_ice_boundary_type), intent(inout) :: land_ice_boundary !< A derived data type to specify properties
@@ -59,6 +59,7 @@ contains
     real,                         intent(in)    :: Dt_cpl_in
     logical,                      intent(in)    :: do_runoff_in
     integer,                      intent(in)    :: cplClock_in
+    logical, optional,            intent(in)    :: calve_ice_shelf_bergs
     logical, optional,            intent(in)    :: ice_sheet_enabled
 
     integer :: is, ie, js, je
@@ -69,6 +70,9 @@ contains
 
     do_IS = .false.
     if (PRESENT(ice_sheet_enabled)) do_IS = ice_sheet_enabled
+
+    do_calve = .false.
+    if (PRESENT(calve_ice_shelf_bergs)) do_calve = calve_ice_shelf_bergs
 
     fluxLandIceClock = fms_mpp_clock_id( 'Flux land to ice', flags=fms_clock_flag_default, grain=CLOCK_ROUTINE )
 
@@ -101,6 +105,7 @@ contains
     allocate( land_ice_boundary%calving(is:ie,js:je) )
     allocate( land_ice_boundary%runoff_hflx(is:ie,js:je) )
     allocate( land_ice_boundary%calving_hflx(is:ie,js:je) )
+    land_ice_boundary%do_calve = do_calve
 
     if (do_IS) then
        land_ice_boundary%do_IS = do_IS
