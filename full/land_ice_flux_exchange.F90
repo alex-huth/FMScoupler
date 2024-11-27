@@ -145,7 +145,7 @@ contains
 
     integer                         :: ier
     real, dimension(n_xgrid_runoff) :: ex_runoff, ex_calving, ex_runoff_hflx, ex_calving_hflx
-    real, dimension(n_xgrid_IS)     :: ex_adot
+    real, dimension(n_xgrid_IS)     :: ex_adot, ex_adot_mask
     real, dimension(size(Land_Ice_Boundary%runoff,1),size(Land_Ice_Boundary%runoff,2),1) :: ice_buf
 
     !Balaji
@@ -154,6 +154,21 @@ contains
 
     ! ccc = conservation_check(Land%discharge, 'LND', xmap_runoff)
     ! if (fms_mpp_pe()==fms_mpp_root_pe()) print *,'RUNOFF', ccc
+
+    if (do_IS) then
+       call fms_xgrid_put_to_xgrid ( Land%IS_adot_sg,      'LND', ex_adot,  xmap_IS)
+       call fms_xgrid_put_to_xgrid ( Land%IS_mask_sg,      'LND', ex_adot_mask,  xmap_IS)
+       call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot,  xmap_IS)
+       Land_Ice_Boundary%IS_adot_sg = ice_buf(:,:,1)
+       call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot_mask,  xmap_IS)
+       Land_Ice_Boundary%IS_mask_sg = ice_buf(:,:,1)
+
+       call fms_data_override('ICE', 'IS_adot' , Land_Ice_Boundary%IS_adot_sg , Time)
+       call fms_data_override('ICE', 'IS_mask' , Land_Ice_Boundary%IS_mask_sg , Time)
+    else
+       Land_Ice_Boundary%IS_adot_sg = 0.0
+       Land_Ice_Boundary%IS_mask_sg = 0.0
+    endif
 
     if (do_runoff) then
        call fms_xgrid_put_to_xgrid ( Land%discharge,      'LND', ex_runoff,  xmap_runoff)
@@ -168,6 +183,7 @@ contains
        Land_Ice_Boundary%runoff_hflx = ice_buf(:,:,1);
        call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_calving_hflx, xmap_runoff)
        Land_Ice_Boundary%calving_hflx = ice_buf(:,:,1);
+
        !Balaji
        call fms_data_override('ICE', 'runoff' , Land_Ice_Boundary%runoff , Time)
        call fms_data_override('ICE', 'calving', Land_Ice_Boundary%calving, Time)
@@ -189,13 +205,6 @@ contains
        Land_Ice_Boundary%calving = 0.0
        Land_Ice_Boundary%runoff_hflx = 0.0
        Land_Ice_Boundary%calving_hflx = 0.0
-    endif
-
-    if (do_IS) then
-       call fms_xgrid_put_to_xgrid ( Land%IS_adot_sg,      'LND', ex_adot,  xmap_IS)
-       call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot,  xmap_IS)
-       Land_Ice_Boundary%IS_adot_sg = ice_buf(:,:,1)
-       call fms_data_override('ICE', 'IS_adot' , Land_Ice_Boundary%IS_adot_sg , Time)
     endif
 
     call fms_mpp_clock_end(fluxLandIceClock)
