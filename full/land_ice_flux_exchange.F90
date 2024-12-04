@@ -77,7 +77,7 @@ contains
     fluxLandIceClock = fms_mpp_clock_id( 'Flux land to ice', flags=fms_clock_flag_default, grain=CLOCK_ROUTINE )
 
     n_xgrid_IS=1
-    if (do_IS) then
+    if (do_IS.or.do_calve) then
        call fms_xgrid_setup_xmap(xmap_IS, (/ 'LND', 'OCN' /),       &
           (/ Land%Domain, Ice%Domain /),                    &
           "INPUT_lndXIS/grid_spec.nc", input_dir='INPUT_lndXIS/')
@@ -107,10 +107,10 @@ contains
     allocate( land_ice_boundary%calving_hflx(is:ie,js:je) )
     land_ice_boundary%do_calve = do_calve
 
-    if (do_IS) then
-       land_ice_boundary%do_IS = do_IS
-       allocate( land_ice_boundary%IS_adot_sg(is:ie,js:je) )
-       land_ice_boundary%IS_adot_sg=0.0
+    land_ice_boundary%do_IS = do_IS
+    if (do_IS) allocate( land_ice_boundary%IS_adot_sg(is:ie,js:je) )
+
+    if (do_IS .or. do_calve) then
        allocate( land_ice_boundary%IS_mask_sg(is:ie,js:je) )
        land_ice_boundary%IS_mask_sg=0.0
     endif
@@ -155,15 +155,17 @@ contains
     ! ccc = conservation_check(Land%discharge, 'LND', xmap_runoff)
     ! if (fms_mpp_pe()==fms_mpp_root_pe()) print *,'RUNOFF', ccc
 
-    if (do_IS) then
-       call fms_xgrid_put_to_xgrid ( Land%IS_adot_sg,      'LND', ex_adot,  xmap_IS)
+    if (do_IS.or.do_calve) then
+       if (do_IS) then
+          call fms_xgrid_put_to_xgrid ( Land%IS_adot_sg,      'LND', ex_adot,  xmap_IS) 
+          call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot,  xmap_IS)
+          Land_Ice_Boundary%IS_adot_sg = ice_buf(:,:,1)
+          call fms_data_override('ICE', 'IS_adot' , Land_Ice_Boundary%IS_adot_sg , Time)
+       endif
+
        call fms_xgrid_put_to_xgrid ( Land%IS_mask_sg,      'LND', ex_adot_mask,  xmap_IS)
-       call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot,  xmap_IS)
-       Land_Ice_Boundary%IS_adot_sg = ice_buf(:,:,1)
        call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot_mask,  xmap_IS)
        Land_Ice_Boundary%IS_mask_sg = ice_buf(:,:,1)
-
-       call fms_data_override('ICE', 'IS_adot' , Land_Ice_Boundary%IS_adot_sg , Time)
        call fms_data_override('ICE', 'IS_mask' , Land_Ice_Boundary%IS_mask_sg , Time)
     else
        Land_Ice_Boundary%IS_adot_sg = 0.0

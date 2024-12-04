@@ -936,6 +936,7 @@ contains
       call fms_mpp_clock_begin(coupler_clocks%land_model_init)
       call land_model_init( Atmos_land_boundary, Land, Time_init, Time, &
                             Time_step_atmos, Time_step_cpld, &
+                            ice_sheet_calving=calve_ice_shelf_bergs, &
                             ice_sheet_enabled=ice_sheet_enabled )
       call fms_mpp_clock_end(coupler_clocks%land_model_init)
 
