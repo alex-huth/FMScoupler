@@ -157,7 +157,7 @@ contains
 
     if (do_IS.or.do_calve) then
        if (do_IS) then
-          call fms_xgrid_put_to_xgrid ( Land%IS_adot_sg,      'LND', ex_adot,  xmap_IS) 
+          call fms_xgrid_put_to_xgrid ( Land%IS_adot_sg,      'LND', ex_adot,  xmap_IS)
           call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot,  xmap_IS)
           Land_Ice_Boundary%IS_adot_sg = ice_buf(:,:,1)
           call fms_data_override('ICE', 'IS_adot' , Land_Ice_Boundary%IS_adot_sg , Time)
