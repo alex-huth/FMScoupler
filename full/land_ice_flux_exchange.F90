@@ -46,7 +46,7 @@ module land_ice_flux_exchange_mod
   public :: flux_land_to_ice, land_ice_flux_exchange_init
 
   integer :: cplClock, fluxLandIceClock
-  logical, save :: do_runoff, do_IS, do_calve
+  logical, save :: do_runoff, do_IS, do_calve, do_IS_mask
   real    :: Dt_cpl
 contains
 
@@ -61,7 +61,7 @@ contains
     integer,                      intent(in)    :: cplClock_in
     logical, optional,            intent(in)    :: calve_ice_shelf_bergs
     logical, optional,            intent(in)    :: ice_sheet_enabled
-
+    real :: IS_mask_flag
     integer :: is, ie, js, je
 
     do_runoff = do_runoff_in
@@ -76,8 +76,17 @@ contains
 
     fluxLandIceClock = fms_mpp_clock_id( 'Flux land to ice', flags=fms_clock_flag_default, grain=CLOCK_ROUTINE )
 
+    !if do_IS_mask is true, the ice-sheet mask is nonzero and will be exchanged from land to LIB
+    !do_IS_mask will be false if using land_null, to avoid requiring the secondary xgrid directory INPUT_lndXIS
+    do_IS_mask=.false. ; IS_mask_flag=0.0
+    if (do_IS .or. do_calve) then
+      if (any(Land%IS_mask_sg/=0.0)) IS_mask_flag=1.0
+      call fms_mpp_max(IS_mask_flag)
+      if (IS_mask_flag>0.0) do_IS_mask=.true.
+    endif
+
     n_xgrid_IS=1
-    if (do_IS.or.do_calve) then
+    if (do_IS.or.(do_calve.and.do_IS_mask)) then
        call fms_xgrid_setup_xmap(xmap_IS, (/ 'LND', 'OCN' /),       &
           (/ Land%Domain, Ice%Domain /),                    &
           "INPUT_lndXIS/grid_spec.nc", input_dir='INPUT_lndXIS/')
@@ -105,10 +114,14 @@ contains
     allocate( land_ice_boundary%calving(is:ie,js:je) )
     allocate( land_ice_boundary%runoff_hflx(is:ie,js:je) )
     allocate( land_ice_boundary%calving_hflx(is:ie,js:je) )
-    land_ice_boundary%do_calve = do_calve
 
+    land_ice_boundary%do_calve = do_calve
     land_ice_boundary%do_IS = do_IS
-    if (do_IS) allocate( land_ice_boundary%IS_adot_sg(is:ie,js:je) )
+
+    if (do_IS) then
+      allocate( land_ice_boundary%IS_adot_sg(is:ie,js:je) )
+      land_ice_boundary%IS_adot_sg=0.0
+    endif
 
     if (do_IS .or. do_calve) then
        allocate( land_ice_boundary%IS_mask_sg(is:ie,js:je) )
@@ -163,13 +176,12 @@ contains
           call fms_data_override('ICE', 'IS_adot' , Land_Ice_Boundary%IS_adot_sg , Time)
        endif
 
-       call fms_xgrid_put_to_xgrid ( Land%IS_mask_sg,      'LND', ex_adot_mask,  xmap_IS)
-       call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot_mask,  xmap_IS)
-       Land_Ice_Boundary%IS_mask_sg = ice_buf(:,:,1)
-       call fms_data_override('ICE', 'IS_mask' , Land_Ice_Boundary%IS_mask_sg , Time)
-    else
-       Land_Ice_Boundary%IS_adot_sg = 0.0
-       Land_Ice_Boundary%IS_mask_sg = 0.0
+       if (do_IS_mask) then
+         call fms_xgrid_put_to_xgrid ( Land%IS_mask_sg,      'LND', ex_adot_mask,  xmap_IS)
+         call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot_mask,  xmap_IS)
+         Land_Ice_Boundary%IS_mask_sg = ice_buf(:,:,1)
+         !TODO Land_Ice_boundaryIB%IS_mask_sg is currently unused, but could be a useful diagnostic
+       endif
     endif
 
     if (do_runoff) then
