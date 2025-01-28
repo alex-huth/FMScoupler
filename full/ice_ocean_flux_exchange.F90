@@ -253,6 +253,8 @@ contains
     call fms_mpp_clock_begin(cplOcnClock)
     call fms_mpp_clock_begin(fluxIceOceanClock)
 
+    Ice_Ocean_Boundary%IS_adot_int_land=Ice%IS_adot_int_land
+
     if(ASSOCIATED(Ice_Ocean_Boundary%u_flux) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%flux_u, Ice_Ocean_Boundary%u_flux, Ice_Ocean_Boundary%xtype, .FALSE. )
 

@@ -145,6 +145,8 @@ contains
   !!
   !! The following elements are transferred from the Land to the Land_ice_boundary:
   !! <pre>
+  !!        IS_adot_sg (kg s-1) --> IS_adot_sg (kg m-2 s-1)
+  !!        IS_mask_sg --> IS_mask_sg (nondim)
   !!        discharge --> runoff (kg/m2)
   !!        discharge_snow --> calving (kg/m2)
   !! </pre>
@@ -170,10 +172,11 @@ contains
 
     if (do_IS.or.do_calve) then
        if (do_IS) then
-          call fms_xgrid_put_to_xgrid ( Land%IS_adot_sg,      'LND', ex_adot,  xmap_IS)
+          call fms_xgrid_put_to_xgrid ( Land%IS_adot_sg,      'LND', ex_adot,  xmap_IS) !Land%IS_adot_sg in (kg s-1)
           call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot,  xmap_IS)
-          Land_Ice_Boundary%IS_adot_sg = ice_buf(:,:,1)
-          call fms_data_override('ICE', 'IS_adot' , Land_Ice_Boundary%IS_adot_sg , Time)
+          ! Land_Ice_Boundary%IS_adot_sg = ice_buf(:,:,1) / Ice%area
+          call fms_data_override('ICE', 'IS_adot' , Land_Ice_Boundary%IS_adot_sg , Time) !override units: kg m-2 s-1
+          ! Ice%IS_hole_adot_int = Land%IS_adot_int
        endif
 
        if (do_IS_mask) then

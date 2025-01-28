@@ -609,6 +609,9 @@ program coupler_main
 
     endif atm_pe_block
 
+    !Are both of these fields defined on all PEs?
+    Ice%IS_adot_int_land = Land%IS_adot_int
+
     !> Ice is still using ATM pelist and need to be included in ATM clock
     !> ATM clock is used for load-balancing the coupled models
     start_atm_clock2: if(Atm%pe) then
