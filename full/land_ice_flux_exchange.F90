@@ -145,6 +145,8 @@ contains
   !!
   !! The following elements are transferred from the Land to the Land_ice_boundary:
   !! <pre>
+  !!        IS_adot_sg (kg/m2/s) --> IS_adot_sg (kg/m2/s)
+  !!        IS_mask_sg --> IS_mask_sg (nondim)
   !!        discharge --> runoff (kg/m2)
   !!        discharge_snow --> calving (kg/m2)
   !! </pre>

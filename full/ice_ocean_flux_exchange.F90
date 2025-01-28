@@ -175,6 +175,7 @@ contains
     else
        ocean_ice_boundary%stagger = AGRID
     endif
+    ice_ocean_boundary%IS_adot_int_land = 0.0
 
     ! allocate fields for extra tracer fluxes in ice_ocean_boundary
     if (.not.fms_coupler_type_initialized(ice_ocean_boundary%fluxes)) &
@@ -252,6 +253,8 @@ contains
 
     call fms_mpp_clock_begin(cplOcnClock)
     call fms_mpp_clock_begin(fluxIceOceanClock)
+
+    Ice_Ocean_Boundary%IS_adot_int_land = Ice%IS_adot_int_land
 
     if(ASSOCIATED(Ice_Ocean_Boundary%u_flux) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%flux_u, Ice_Ocean_Boundary%u_flux, Ice_Ocean_Boundary%xtype, .FALSE. )

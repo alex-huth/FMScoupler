@@ -539,7 +539,7 @@ program coupler_main
 
           !> land model
           if (do_land .AND. land%pe) call coupler_update_land_model_fast(Land, Atmos_land_boundary, Atm%pelist, &
-                                     current_timestep, coupler_chksum_obj, coupler_clocks)
+                                     na, current_timestep, coupler_chksum_obj, coupler_clocks)
 
           !> ice model
           if (do_ice .AND. Ice%fast_ice_pe) call coupler_update_ice_model_fast(Ice, Atmos_ice_boundary, Atm%pelist, &
@@ -609,6 +609,9 @@ program coupler_main
 
     endif atm_pe_block
 
+    if (do_ice .and. ice_sheet_enabled .and. (.not. concurrent_ice)) &
+      call coupler_adot_int_land_to_ice(Land, Ocean, Ice, Atm, Ice_ocean_boundary,slow_ice_ocean_pelist)
+
     !> Ice is still using ATM pelist and need to be included in ATM clock
     !> ATM clock is used for load-balancing the coupled models
     start_atm_clock2: if(Atm%pe) then
@@ -655,7 +658,7 @@ program coupler_main
       if (combined_ice_and_ocean) then
         call flux_ice_to_ocean_stocks(Ice)
         call update_slow_ice_and_ocean(ice_ocean_driver_CS, Ice, Ocean_state, Ocean, &
-                                       Ice_ocean_boundary, Time_ocean, Time_step_cpld )
+                                       Ice_ocean_boundary, Time_ocean, Time_step_cpld, OIB=Ocean_ice_boundary)
       else
         if (do_chksum) call coupler_chksum_obj%get_ocean_chksums('update_ocean_model-', nc)
         ! update_ocean_model since fluxes don't change here
@@ -674,6 +677,9 @@ program coupler_main
 
       call fms_mpp_clock_end(coupler_clocks%ocean)
     endif
+
+    if (do_ice .and. ice_sheet_enabled .and. concurrent_ice) &
+      call coupler_adot_int_land_to_ice(Land, Ocean, Ice, Atm, Ice_ocean_boundary,slow_ice_ocean_pelist)
 
     !> write out intermediate restart file when needead.
     if (Time >= Time_restart) &
