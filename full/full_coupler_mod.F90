@@ -410,10 +410,8 @@ contains
                             ! atmosphere-ocean gas and tracer fluxes.
 
     integer :: num_ice_bc_restart, num_ocn_bc_restart
-!!$    integer :: tmp_PE_list_size
-    real :: IS_adot_int_land
-!!$    integer, allocatable, dimension(:) :: tmp_PE_list
-
+    real :: IS_adot_int_land !< The total surface mass flux to the ice sheet from land, area-integrated over the
+                             !! the land grid (kg s-1)
 !-----------------------------------------------------------------------
 
     outunit = fms_mpp_stdout()
@@ -589,7 +587,7 @@ contains
           if(ice_npes .GE. ocean_npes) then
              allocate(slow_ice_ocean_pelist(ice_npes))
              slow_ice_ocean_pelist(:) = Ice%slow_pelist(:)
-           else
+          else
              allocate(slow_ice_ocean_pelist(ocean_npes))
              slow_ice_ocean_pelist(:) = Ocean%pelist(:)
           endif
@@ -1126,34 +1124,16 @@ contains
 
     call fms_mpp_set_current_pelist()
 
-    ! Ice%IS_adot_int_land will be reassigned directly to Ice_Ocean_Boundary%IS_adot_in_land.
     ! The global scalar Ice%IS_adot_int_land is restarted on the slow_ice PEs. It will be reassigned
-    ! directly to the Ice_ocean_boundary%IS_adot_int_land, so needs to be broadcasted to the
+    ! directly to Ice_ocean_boundary%IS_adot_int_land, so needs to be broadcasted to the
     ! slow_ice_ocean_pelist
     IS_adot_int_land=0.
-    if (fms_mpp_pe().EQ.Ice%slow_pelist(1)) then
-      IS_adot_int_land = Ice%IS_adot_int_land
-      print *,'IS_adot_int_land slowpelist1',IS_adot_int_land, fms_mpp_pe(), slow_ice_ocean_pelist(1)
-    endif
+    if (fms_mpp_pe().EQ.Ice%slow_pelist(1)) IS_adot_int_land = Ice%IS_adot_int_land
 
-    !if (Ice%slow_ice_PE .or. any(slow_ice_ocean_pelist(:) .eq. fms_mpp_pe())) then
     if (Ice%slow_ice_PE .or. Ocean%is_ocean_pe) then
-      if (.not. any(slow_ice_ocean_pelist(:) .eq. fms_mpp_pe())) then
+      if (.not. any(slow_ice_ocean_pelist(:) .eq. fms_mpp_pe())) &
         call fms_mpp_error(FATAL, 'There is a slow ice or Ocean PE that is not in the slow_ice_ocean_pelist!')
-      endif
       call fms_mpp_broadcast(IS_adot_int_land, Ice%slow_pelist(1), pelist=slow_ice_ocean_pelist)
-      ! if (any(slow_ice_ocean_pelist(:) .eq. Ice%slow_pelist(1))) then
-      !   call fms_mpp_broadcast(IS_adot_int_land, Ice%slow_pelist(1), pelist=slow_ice_ocean_pelist)
-      ! else
-      !   call fms_mpp_error(FATAL, 'Ice%slow_pelist is not a subset of slow_ice_ocean_pelist!')
-      !   !This should be unnecessary, I think...
-      !   tmp_PE_list_size=size(slow_ice_ocean_pelist)+1
-      !   allocate(tmp_PE_list(tmp_PE_list_size))
-      !   tmp_PE_list(1)=Ice%slow_pelist(1)
-      !   tmp_PE_list(2:tmp_PE_list_size)=slow_ice_ocean_pelist
-      !   call fms_mpp_broadcast(IS_adot_int_land, Ice%slow_pelist(1), pelist=tmp_PE_list)
-      !   deallocate(tmp_PE_list)
-      ! endif
     endif
 
     Ice%IS_adot_int_land = IS_adot_int_land
@@ -1797,7 +1777,7 @@ contains
     endif
 
     call fms_mpp_set_current_pelist()
-    coupler_clocks%flux_check_stocks       = fms_mpp_clock_id( 'fluxg_check_stocks' )
+    coupler_clocks%flux_check_stocks       = fms_mpp_clock_id( 'flux_check_stocks' )
     coupler_clocks%intermediate_restart    = fms_mpp_clock_id( 'intermediate restart' )
     coupler_clocks%final_flux_check_stocks = fms_mpp_clock_id( 'final flux_check_stocks' )
 
@@ -1860,7 +1840,6 @@ contains
     call fms_mpp_set_current_pelist()
     call fms_mpp_clock_begin(coupler_clocks%flux_check_stocks)
     if (check_stocks*((nc-1)/check_stocks) == nc-1 .AND. nc > 1) then
-    !  call fms_mpp_set_current_pelist()
       call flux_check_stocks(Time=Time, Atm=Atm, Lnd=Land, Ice=Ice, Ocn_state=Ocean_state)
     endif
     call fms_mpp_clock_end(coupler_clocks%flux_check_stocks)
@@ -2166,7 +2145,7 @@ contains
     type(land_data_type),           intent(inout) :: Land !< Land
     type(atmos_land_boundary_type), intent(inout) :: Atmos_land_boundary !< Atmos_land_boundary
     integer, dimension(:), intent(in) :: atm_pelist !< Atm%pelist to reset the pelist to Atm%pelist
-    integer,                   intent(in) :: na       !< current atm fast iteration
+    integer,                   intent(in) :: na     !< current atm fast iteration
     integer,                   intent(in) :: current_timestep       !< current timestep
     type(coupler_chksum_type), intent(in) :: coupler_chksum_obj     !< points to component types
     type(coupler_clock_type),  intent(inout) :: coupler_clocks      !< coupler_clocks
@@ -2349,56 +2328,31 @@ contains
     type(atmos_data_type),         intent(in) :: Atm  !< Atm
     type(Ice_ocean_boundary_type),   intent(inout) :: Ice_ocean_boundary  !< Ice_ocean_boundary
     integer, dimension(:),   intent(in) :: slow_ice_ocean_pelist !< slow_ice_oean_pelist
-    real :: IS_adot_int_land !The area-integrated ice-sheet surface mass flux in the land model
+    real :: IS_adot_int_land ! The area-integrated ice-sheet surface mass flux in the land model
     integer, save, allocatable, dimension(:) :: land1_slow_ice_ocean_pelist
 
     if (.not. allocated(land1_slow_ice_ocean_pelist)) then
       if (any(slow_ice_ocean_pelist(:) .eq. Land%pelist(1))) then
-        if (fms_mpp_pe().eq.Land%pelist(1)) print *,'land pe 1 is in slow_ice_ocean_pelist'
         allocate(land1_slow_ice_ocean_pelist(size(slow_ice_ocean_pelist)))
         land1_slow_ice_ocean_pelist=slow_ice_ocean_pelist
       else
-        if (fms_mpp_pe().eq.Land%pelist(1)) print *,'land pe 1 is not in slow_ice_ocean_pelist'
         allocate(land1_slow_ice_ocean_pelist(size(slow_ice_ocean_pelist)+1))
         land1_slow_ice_ocean_pelist(1)=Land%pelist(1)
         land1_slow_ice_ocean_pelist(2:size(land1_slow_ice_ocean_pelist))=slow_ice_ocean_pelist
       endif
     endif
 
-    !Broadcast IS_adot_int_land from land PEs to slow_ice_ocean PEs
     call fms_mpp_set_current_pelist()
     if (land%pe) IS_adot_int_land = Land%IS_adot_int
 
-    ! Ice%IS_adot_int_land will be reassigned directly to Ice_Ocean_Boundary%IS_adot_in_land.
-    ! The global scalar Ice%IS_adot_int_land is restarted on the slow_ice PEs. It will be reassigned
-    ! directly to the Ice_ocean_boundary%IS_adot_int_land, so needs to be broadcasted to the
-    ! slow_ice_ocean_pelist
-
-    ! if ((fms_mpp_pe() .eq. Land%pelist(1)) .or. any(slow_ice_ocean_pelist(:) .eq. fms_mpp_pe())) then
     if ((fms_mpp_pe() .eq. Land%pelist(1)) .or. Ice%slow_ice_PE .or. Ocean%is_ocean_pe) &
       call fms_mpp_broadcast(IS_adot_int_land, Land%pelist(1), pelist=land1_slow_ice_ocean_pelist)
 
-!!$    ! call fms_mpp_broadcast(IS_adot_int_land, fms_mpp_root_pe(), pelist=Ocean%pelist)
-!!$    call fms_mpp_broadcast(IS_adot_int_land, Land%pelist(1), pelist=slow_ice_ocean_pelist)
-!!$    if (fms_mpp_pe().EQ.fms_mpp_root_pe()) print *,'coupler IS_adot',IS_adot_int_land,fms_mpp_pe()
-
     if (Ice%slow_ice_PE .or. Ocean%is_ocean_pe) Ice%IS_adot_int_land=IS_adot_int_land
 
-    !Assign IS_adot_in_land to the ice_data type and reset the fms current pelists
-    ! if (Ice%pe) then
-    !   call fms_mpp_set_current_pelist(Ice%pelist)
-    !   if (concurrent_ice .and. Ice%slow_ice_pe .and. calve_ice_shelf_bergs) &
-    !     call fms_mpp_set_current_pelist(Ice%slow_pelist)
-    !   if (Ice%fast_ice_pe .and. .not.Ice%shared_slow_fast_PEs) call fms_mpp_set_current_pelist(Ice%fast_pelist)
-    ! endif
-    ! if(Atm%pe) call fms_mpp_set_current_pelist(Atm%pelist)
-
+    ! Reset current PElists
     if (Ice%pe) then
-      ! call fms_mpp_set_current_pelist(Ice%pelist)
-      if (Ice%slow_ice_pe) then
-        call fms_mpp_set_current_pelist(Ice%slow_pelist)
-        if (fms_mpp_pe().EQ.fms_mpp_root_pe()) print *,'coupler land2ice IS_adot',Ice%IS_adot_int_land,fms_mpp_pe()
-      endif
+      if (Ice%slow_ice_pe) call fms_mpp_set_current_pelist(Ice%slow_pelist)
       if (.not.Ice%shared_slow_fast_PEs) call fms_mpp_set_current_pelist(Ice%pelist)
       if (concurrent_ice .and. Ice%slow_ice_pe .and. calve_ice_shelf_bergs) &
         call fms_mpp_set_current_pelist(Ice%slow_pelist)

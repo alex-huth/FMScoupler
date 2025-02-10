@@ -255,8 +255,6 @@ contains
     call fms_mpp_clock_begin(fluxIceOceanClock)
 
     Ice_Ocean_Boundary%IS_adot_int_land = Ice%IS_adot_int_land
-    if (fms_mpp_pe().EQ.fms_mpp_root_pe()) print *,'flux_ice_to_ocean IS_adot',&
-      Ice_Ocean_Boundary%IS_adot_int_land,fms_mpp_pe()
 
     if(ASSOCIATED(Ice_Ocean_Boundary%u_flux) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%flux_u, Ice_Ocean_Boundary%u_flux, Ice_Ocean_Boundary%xtype, .FALSE. )
