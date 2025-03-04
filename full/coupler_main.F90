@@ -609,7 +609,7 @@ program coupler_main
 
     endif atm_pe_block
 
-    if (do_ice .and. ice_sheet_enabled) &
+    if (do_ice .and. ice_sheet_enabled .and. (.not. concurrent_ice)) &
       call coupler_adot_int_land_to_ice(Land, Ocean, Ice, Atm, Ice_ocean_boundary,slow_ice_ocean_pelist)
 
     !> Ice is still using ATM pelist and need to be included in ATM clock
@@ -677,6 +677,9 @@ program coupler_main
 
       call fms_mpp_clock_end(coupler_clocks%ocean)
     endif
+
+    if (do_ice .and. ice_sheet_enabled .and. concurrent_ice) &
+      call coupler_adot_int_land_to_ice(Land, Ocean, Ice, Atm, Ice_ocean_boundary,slow_ice_ocean_pelist)
 
     !> write out intermediate restart file when needead.
     if (Time >= Time_restart) &

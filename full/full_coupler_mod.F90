@@ -2351,12 +2351,16 @@ contains
     if (Ice%slow_ice_PE .or. Ocean%is_ocean_pe) Ice%IS_adot_int_land=IS_adot_int_land
 
     ! Reset current PElists
-    if (Ice%pe) then
-      if (Ice%slow_ice_pe) call fms_mpp_set_current_pelist(Ice%slow_pelist)
-      if (.not.Ice%shared_slow_fast_PEs) call fms_mpp_set_current_pelist(Ice%pelist)
-      if (concurrent_ice .and. Ice%slow_ice_pe .and. calve_ice_shelf_bergs) &
-        call fms_mpp_set_current_pelist(Ice%slow_pelist)
-      if (Ice%fast_ice_pe .and. .not.Ice%shared_slow_fast_PEs) call fms_mpp_set_current_pelist(Ice%fast_pelist)
+    if (concurrent_ice) then
+      if (Ocean%is_ocean_pe) call fms_mpp_set_current_pelist(Ocean%pelist)
+    else
+      if (Ice%pe) then
+        if (Ice%slow_ice_pe) call fms_mpp_set_current_pelist(Ice%slow_pelist)
+        if (.not.Ice%shared_slow_fast_PEs) call fms_mpp_set_current_pelist(Ice%pelist)
+        ! if (concurrent_ice .and. Ice%slow_ice_pe .and. calve_ice_shelf_bergs) &
+          ! call fms_mpp_set_current_pelist(Ice%slow_pelist)
+        if (Ice%fast_ice_pe .and. .not.Ice%shared_slow_fast_PEs) call fms_mpp_set_current_pelist(Ice%fast_pelist)
+      endif
     endif
 
   end subroutine coupler_adot_int_land_to_ice
