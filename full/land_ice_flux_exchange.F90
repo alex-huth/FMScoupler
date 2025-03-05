@@ -61,7 +61,6 @@ contains
     integer,                      intent(in)    :: cplClock_in
     logical, optional,            intent(in)    :: calve_ice_shelf_bergs
     logical, optional,            intent(in)    :: ice_sheet_enabled
-
     real :: IS_mask_flag
     integer :: is, ie, js, je
 
@@ -115,8 +114,8 @@ contains
     allocate( land_ice_boundary%calving(is:ie,js:je) )
     allocate( land_ice_boundary%runoff_hflx(is:ie,js:je) )
     allocate( land_ice_boundary%calving_hflx(is:ie,js:je) )
-    land_ice_boundary%do_calve = do_calve
 
+    land_ice_boundary%do_calve = do_calve
     land_ice_boundary%do_IS = do_IS
 
     if (do_IS) then
