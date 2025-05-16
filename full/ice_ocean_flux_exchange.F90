@@ -57,7 +57,7 @@ contains
   subroutine ice_ocean_flux_exchange_init(Time, Ice, Ocean, Ocean_state, ice_ocean_boundary, &
                                           ocean_ice_boundary, Dt_cpl_in, debug_stocks_in,    &
                                           do_area_weighted_flux_in, ex_gas_fields_ice, ex_gas_fluxes, &
-                                          do_ocean, slow_ice_ocean_pelist_in, calve_ice_shelf_bergs )
+                                          do_ocean, slow_ice_ocean_pelist_in, calve_ice_shelf_bergs, ice_sheet_enabled)
 
     type(FmsTime_type),               intent(in)    :: Time !< The model's current time
     type(ice_data_type),           intent(inout) :: Ice !< A derived data type to specify ice boundary data
@@ -78,11 +78,16 @@ contains
                                               !! convert ice shelf into bonded-particle tabular bergs where tabular
                                               !! calving mask exceeds zero. If 'MIXED', use 'POINT' for N Hemisphere
                                               !! and 'BONDED' for S Hemisphere. If 'NONE', no calving.
+    logical, optional,             intent(in)    :: ice_sheet_enabled
     integer              :: is, ie, js, je
+    logical              :: do_IS
 
     Dt_cpl = Dt_cpl_in
     debug_stocks = debug_stocks_in
     do_area_weighted_flux = do_area_weighted_flux_in
+
+    do_IS=.false.
+    if (present(ice_sheet_enabled)) do_IS=ice_sheet_enabled
 
     !ocean_ice_boundary and ice_ocean_boundary must be done on all PES
     !domain boundaries will assure no space is allocated on non-relevant PEs.
@@ -158,6 +163,10 @@ contains
     allocate( ice_ocean_boundary%calving_hflx  (is:ie,js:je) ) ;    ice_ocean_boundary%calving_hflx = 0.0
     allocate( ice_ocean_boundary%p        (is:ie,js:je) ) ;         ice_ocean_boundary%p = 0.0
     allocate( ice_ocean_boundary%mi       (is:ie,js:je) ) ;         ice_ocean_boundary%mi = 0.0
+    if (do_IS) then
+      allocate( ice_ocean_boundary%shelf_sfc_mass_flux (is:ie,js:je) )
+      ice_ocean_boundary%shelf_sfc_mass_flux = 0.0
+    endif
     !Allocating iceberg fields, if the corresponding fields are assosiated in the sea ice model(s)
     if (associated(Ice%ustar_berg)) then
       allocate( ice_ocean_boundary%ustar_berg (is:ie,js:je) ) ;     ice_ocean_boundary%ustar_berg = 0.0
@@ -185,6 +194,7 @@ contains
     else
        ocean_ice_boundary%stagger = AGRID
     endif
+    ice_ocean_boundary%IS_adot_int_land = 0.0
 
     ! allocate fields for extra tracer fluxes in ice_ocean_boundary
     if (.not.fms_coupler_type_initialized(ice_ocean_boundary%fluxes)) &
@@ -263,6 +273,8 @@ contains
     call fms_mpp_clock_begin(cplOcnClock)
     call fms_mpp_clock_begin(fluxIceOceanClock)
 
+    Ice_Ocean_Boundary%IS_adot_int_land = Ice%IS_adot_int_land
+
     if(ASSOCIATED(Ice_Ocean_Boundary%u_flux) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%flux_u, Ice_Ocean_Boundary%u_flux, Ice_Ocean_Boundary%xtype, .FALSE. )
 
@@ -318,6 +330,9 @@ contains
     if(ASSOCIATED(Ice_Ocean_Boundary%calving) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
          Ice%calving, Ice_Ocean_Boundary%calving, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
+    if(ASSOCIATED(Ice_Ocean_Boundary%shelf_sfc_mass_flux) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
+         Ice%adot, Ice_Ocean_Boundary%shelf_sfc_mass_flux, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
+
     if(ASSOCIATED(Ice_Ocean_Boundary%ustar_berg) ) call flux_ice_to_ocean_redistribute( Ice, Ocean, &
        Ice%ustar_berg, Ice_Ocean_Boundary%ustar_berg, Ice_Ocean_Boundary%xtype, do_area_weighted_flux )
 
@@ -359,8 +374,8 @@ contains
   subroutine flux_ice_to_ocean_finish ( Time, Ice_Ocean_Boundary )
 
     type(FmsTime_type),                 intent(in)  :: Time !< Current time
-    type(ice_ocean_boundary_type), intent(inout) :: Ice_Ocean_Boundary !< A derived data type to specify properties and
-                                                         !! fluxes passed from ice to ocean
+    type(ice_ocean_boundary_type), intent(inout) :: Ice_Ocean_Boundary !< A derived data type to specify properties
+                                                         !! and fluxes passed from ice to ocean
 
     call fms_data_override('OCN', 'u_flux',    Ice_Ocean_Boundary%u_flux   , Time )
     call fms_data_override('OCN', 'v_flux',    Ice_Ocean_Boundary%v_flux   , Time )
@@ -425,8 +440,8 @@ contains
 
     type(ocean_public_type),         intent(in)  :: Ocean !< A derived data type to specify ocean boundary data
     type(ice_data_type),             intent(in)  :: Ice   !< A derived data type to specify ice boundary data
-    type(ocean_ice_boundary_type), intent(inout) :: Ocean_Ice_Boundary !< A derived data type to specify properties and
-                                                          !! fluxes passed from ocean to ice
+    type(ocean_ice_boundary_type), intent(inout) :: Ocean_Ice_Boundary !< A derived data type to specify properties
+                                                          !! and fluxes passed from ocean to ice
     real, allocatable, dimension(:,:) :: tmp
     integer       :: m
     integer       :: n
@@ -531,7 +546,8 @@ contains
                call divide_by_area(data=Ocean_Ice_Boundary%calving, area=Ice%area)
              if (Ocean%is_ocean_pe) deallocate(tmp)
           else
-             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving)
+             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving, Ice%slow_Domain_NH, &
+                Ocean_Ice_Boundary%calving)
           endif
        endif
        if( ASSOCIATED(Ocean_Ice_Boundary%calving_hflx) ) then
@@ -540,12 +556,14 @@ contains
                allocate(tmp(size(Ocean%area,1), size(Ocean%area,2)))
                tmp(:,:) = Ocean%calving_hflx(:,:) * Ocean%area(:,:)
              endif
-             call fms_mpp_domains_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving_hflx)
+             call fms_mpp_domains_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, &
+                Ocean_Ice_Boundary%calving_hflx)
              if (Ice%slow_ice_pe) &
                call divide_by_area(data=Ocean_Ice_Boundary%calving_hflx, area=Ice%area)
              if (Ocean%is_ocean_pe) deallocate(tmp)
           else
-             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving_hflx, Ice%slow_Domain_NH, Ocean_Ice_Boundary%calving_hflx)
+             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%calving_hflx, Ice%slow_Domain_NH, &
+                Ocean_Ice_Boundary%calving_hflx)
           endif
        endif
 
@@ -599,8 +617,8 @@ contains
 
     type(FmsTime_type),                 intent(in)  :: Time  !< Current time
     type(ice_data_type),             intent(in)  :: Ice   !< A derived data type to specify ice boundary data
-    type(ocean_ice_boundary_type), intent(inout) :: Ocean_Ice_Boundary !< A derived data type to specify properties and
-                                                          !! fluxes passed from ocean to ice
+    type(ocean_ice_boundary_type), intent(inout) :: Ocean_Ice_Boundary !< A derived data type to specify properties
+                                                          !! and fluxes passed from ocean to ice
     real          :: from_dq
 
     call fms_data_override('ICE', 'u',         Ocean_Ice_Boundary%u,         Time)

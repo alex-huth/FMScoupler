@@ -35,19 +35,23 @@ module land_ice_flux_exchange_mod
   !---- exchange grid maps -----
 
   type(FmsXgridXmap_type), save :: xmap_runoff
+  type(FmsXgridXmap_type), save :: xmap_IS
   integer         :: n_xgrid_runoff=0
+  integer         :: n_xgrid_IS=0
 
   ! Exchange grid indices
   integer :: X2_GRID_LND, X2_GRID_ICE
+  integer :: X2_IS_GRID_LND, X2_IS_GRID_ICE
 
   public :: flux_land_to_ice, land_ice_flux_exchange_init
 
   integer :: cplClock, fluxLandIceClock
-  logical :: do_runoff
+  logical, save :: do_runoff, do_IS, do_calve, do_IS_mask
   real    :: Dt_cpl
 contains
 
-  subroutine land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl_in, do_runoff_in, cplClock_in)
+  subroutine land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl_in, do_runoff_in, cplClock_in, &
+        calve_ice_shelf_bergs, ice_sheet_enabled)
     type(land_data_type),         intent(in)    :: Land !< A derived data type to specify land boundary data
     type(ice_data_type),          intent(inout) :: Ice !< A derived data type to specify ice boundary data
     type(land_ice_boundary_type), intent(inout) :: land_ice_boundary !< A derived data type to specify properties
@@ -55,13 +59,43 @@ contains
     real,                         intent(in)    :: Dt_cpl_in
     logical,                      intent(in)    :: do_runoff_in
     integer,                      intent(in)    :: cplClock_in
-
+    logical, optional,            intent(in)    :: calve_ice_shelf_bergs
+    logical, optional,            intent(in)    :: ice_sheet_enabled
+    real :: IS_mask_flag
     integer :: is, ie, js, je
 
     do_runoff = do_runoff_in
     cplClock = cplClock_in
     Dt_cpl   = Dt_cpl_in
+
+    do_IS = .false.
+    if (PRESENT(ice_sheet_enabled)) do_IS = ice_sheet_enabled
+
+    do_calve = .false.
+    if (PRESENT(calve_ice_shelf_bergs)) do_calve = calve_ice_shelf_bergs
+
     fluxLandIceClock = fms_mpp_clock_id( 'Flux land to ice', flags=fms_clock_flag_default, grain=CLOCK_ROUTINE )
+
+    !if do_IS_mask is true, the ice-sheet mask is nonzero and will be exchanged from land to LIB
+    !do_IS_mask will be false if using land_null, to avoid requiring the secondary xgrid directory INPUT_lndXIS
+    do_IS_mask=.false. ; IS_mask_flag=0.0
+    if (do_IS .or. do_calve) then
+      if (any(Land%IS_mask_sg/=0.0)) IS_mask_flag=1.0
+      call fms_mpp_max(IS_mask_flag)
+      if (IS_mask_flag>0.0) do_IS_mask=.true.
+    endif
+
+    n_xgrid_IS=1
+    if (do_IS.or.(do_calve.and.do_IS_mask)) then
+       call fms_xgrid_setup_xmap(xmap_IS, (/ 'LND', 'OCN' /),       &
+          (/ Land%Domain, Ice%Domain /),                    &
+          "INPUT_lndXIS/grid_spec.nc", input_dir='INPUT_lndXIS/')
+       ! exchange grid indices
+       X2_IS_GRID_LND = 1; X2_IS_GRID_ICE = 2;
+       n_xgrid_IS = max(fms_xgrid_count(xmap_IS),1)
+       if (n_xgrid_IS.eq.1) write (*,'(a,i6,6x,a)') 'PE = ', fms_mpp_pe(), 'Ice sheet  exchange size equals one.'
+       if (n_xgrid_IS>1) write (*,'(a,i6,6x,a,i6)') 'PE = ', fms_mpp_pe(), 'Ice sheet  exchange grid size= ',n_xgrid_IS
+    endif
 
     if (do_runoff) then
        call fms_xgrid_setup_xmap(xmap_runoff, (/ 'LND', 'OCN' /),       &
@@ -80,6 +114,20 @@ contains
     allocate( land_ice_boundary%calving(is:ie,js:je) )
     allocate( land_ice_boundary%runoff_hflx(is:ie,js:je) )
     allocate( land_ice_boundary%calving_hflx(is:ie,js:je) )
+
+    land_ice_boundary%do_calve = do_calve
+    land_ice_boundary%do_IS = do_IS
+
+    if (do_IS) then
+      allocate( land_ice_boundary%IS_adot_sg(is:ie,js:je) )
+      land_ice_boundary%IS_adot_sg=0.0
+    endif
+
+    if (do_IS .or. do_calve) then
+       allocate( land_ice_boundary%IS_mask_sg(is:ie,js:je) )
+       land_ice_boundary%IS_mask_sg=0.0
+    endif
+
     ! initialize values for override experiments (mjh)
     land_ice_boundary%runoff=0.0
     land_ice_boundary%calving=0.0
@@ -97,6 +145,8 @@ contains
   !!
   !! The following elements are transferred from the Land to the Land_ice_boundary:
   !! <pre>
+  !!        IS_adot_sg (kg/m2/s) --> IS_adot_sg (kg/m2/s)
+  !!        IS_mask_sg --> IS_mask_sg (nondim)
   !!        discharge --> runoff (kg/m2)
   !!        discharge_snow --> calving (kg/m2)
   !! </pre>
@@ -105,11 +155,12 @@ contains
     type(land_data_type),           intent(in) :: Land !< A derived data type to specify land boundary data
     type(ice_data_type),            intent(in) :: Ice !< A derived data type to specify ice boundary data
     !real, dimension(:,:),         intent(out) :: runoff_ice, calving_ice
-    type(land_ice_boundary_type), intent(inout):: Land_Ice_Boundary !< A derived data type to specify properties and
-                                                                    !! fluxes passed from land to ice
+    type(land_ice_boundary_type), intent(inout):: Land_Ice_Boundary !< A derived data type to specify properties
+                                                                    !! and fluxes passed from land to ice
 
     integer                         :: ier
     real, dimension(n_xgrid_runoff) :: ex_runoff, ex_calving, ex_runoff_hflx, ex_calving_hflx
+    real, dimension(n_xgrid_IS)     :: ex_adot, ex_adot_mask
     real, dimension(size(Land_Ice_Boundary%runoff,1),size(Land_Ice_Boundary%runoff,2),1) :: ice_buf
 
     !Balaji
@@ -118,6 +169,22 @@ contains
 
     ! ccc = conservation_check(Land%discharge, 'LND', xmap_runoff)
     ! if (fms_mpp_pe()==fms_mpp_root_pe()) print *,'RUNOFF', ccc
+
+    if (do_IS.or.do_calve) then
+       if (do_IS) then
+          call fms_xgrid_put_to_xgrid ( Land%IS_adot_sg,      'LND', ex_adot,  xmap_IS)
+          call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot,  xmap_IS)
+          Land_Ice_Boundary%IS_adot_sg = ice_buf(:,:,1)
+          call fms_data_override('ICE', 'IS_adot' , Land_Ice_Boundary%IS_adot_sg , Time)
+       endif
+
+       if (do_IS_mask) then
+         call fms_xgrid_put_to_xgrid ( Land%IS_mask_sg,      'LND', ex_adot_mask,  xmap_IS)
+         call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_adot_mask,  xmap_IS)
+         Land_Ice_Boundary%IS_mask_sg = ice_buf(:,:,1)
+         !TODO Land_Ice_boundaryIB%IS_mask_sg is currently unused, but could be a useful diagnostic
+       endif
+    endif
 
     if (do_runoff) then
        call fms_xgrid_put_to_xgrid ( Land%discharge,      'LND', ex_runoff,  xmap_runoff)
@@ -132,6 +199,7 @@ contains
        Land_Ice_Boundary%runoff_hflx = ice_buf(:,:,1);
        call fms_xgrid_get_from_xgrid (ice_buf, 'OCN', ex_calving_hflx, xmap_runoff)
        Land_Ice_Boundary%calving_hflx = ice_buf(:,:,1);
+
        !Balaji
        call fms_data_override('ICE', 'runoff' , Land_Ice_Boundary%runoff , Time)
        call fms_data_override('ICE', 'calving', Land_Ice_Boundary%calving, Time)

@@ -651,7 +651,7 @@ contains
   subroutine flux_exchange_init ( Time, Atm, Land, Ice, Ocean, Ocean_state,&
        atmos_ice_boundary, land_ice_atmos_boundary, &
        land_ice_boundary, ice_ocean_boundary, ocean_ice_boundary, &
-       do_ocean, slow_ice_ocean_pelist, calve_ice_shelf_bergs, dt_atmos, dt_cpld )
+       do_ocean, slow_ice_ocean_pelist, dt_atmos, dt_cpld, calve_ice_shelf_bergs, ice_sheet_enabled )
 
     type(FmsTime_type),                   intent(in)     :: Time !< The model's current time
     type(atmos_data_type),             intent(inout)  :: Atm !< A derived data type to specify atmosphere boundary data
@@ -683,12 +683,14 @@ contains
                                               !! convert ice shelf into bonded-particle tabular bergs where tabular
                                               !! calving mask exceeds zero. If 'MIXED', use 'POINT' for N Hemisphere
                                               !! and 'BONDED' for S Hemisphere. If 'NONE', no calving.
+    logical, optional,                 intent(in)    :: ice_sheet_enabled
 
     character(len=64),  parameter   :: grid_file = 'INPUT/grid_spec.nc'
     integer        :: ierr, io
     integer        :: logunit, unit
     character(len=256) :: errmsg
     integer              :: omp_get_num_threads, nthreads
+    logical        :: do_IS, do_calve
 
     !-----------------------------------------------------------------------
 
@@ -742,6 +744,12 @@ contains
 
     call fms_xgrid_get_ocean_model_area_elements(Ocean%domain, grid_file)
 
+    do_IS=.false.
+    if (present(ice_sheet_enabled)) do_IS=ice_sheet_enabled
+
+    do_calve=.false.
+    if (present(calve_ice_shelf_bergs)) do_calve=calve_ice_shelf_bergs
+
     if( Atm%pe )then
        call fms_mpp_set_current_pelist(Atm%pelist)
        cplClock = fms_mpp_clock_id( 'Land-ice-atm coupler', flags=fms_clock_flag_default, grain=CLOCK_COMPONENT )
@@ -752,13 +760,16 @@ contains
             partition_fprec_from_lprec, scale_precip_2d, nblocks, cplClock, &
             ex_gas_fields_atm, ex_gas_fields_ice, ex_gas_fluxes)
 
-       call land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl, do_runoff, cplClock)
+       call land_ice_flux_exchange_init(Land, Ice, land_ice_boundary, Dt_cpl, do_runoff, cplClock, &
+          calve_ice_shelf_bergs=do_calve,ice_sheet_enabled=do_IS)
+       do_IS=.false.
+       if (associated(land_ice_boundary%IS_adot_sg)) do_IS=.true.
     end if
 
     call fms_mpp_set_current_pelist()
     call ice_ocean_flux_exchange_init(Time, Ice, Ocean, Ocean_state,ice_ocean_boundary, ocean_ice_boundary, &
-         Dt_cpl, debug_stocks, do_area_weighted_flux, ex_gas_fields_ice, ex_gas_fluxes, do_ocean, slow_ice_ocean_pelist, &
-         calve_ice_shelf_bergs)
+         Dt_cpl, debug_stocks, do_area_weighted_flux, ex_gas_fields_ice, ex_gas_fluxes, do_ocean, &
+         slow_ice_ocean_pelist, calve_ice_shelf_bergs, ice_sheet_enabled=do_IS)
 
     !---- done ----
     do_init = .false.

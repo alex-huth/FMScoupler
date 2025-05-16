@@ -131,6 +131,7 @@ module full_coupler_mod
   public :: coupler_unpack_land_ice_boundary, coupler_flux_ice_to_ocean
   public :: coupler_unpack_ocean_ice_boundary_calved_ice_shelf_bergs
   public :: coupler_update_ice_model_slow_and_stocks, coupler_update_ocean_model
+  public :: coupler_adot_int_land_to_ice
 
   public :: coupler_clock_type, coupler_components_type, coupler_chksum_type
 
@@ -226,6 +227,7 @@ module full_coupler_mod
                                               !! convert ice shelf into bonded-particle tabular bergs where tabular
                                               !! calving mask exceeds zero. If 'MIXED', use 'POINT' for N Hemisphere
                                               !! and 'BONDED' for S Hemisphere. If 'NONE', no calving.
+  logical, public :: ice_sheet_enabled = .false. !< If true, the surface mass flux is passed from land through coupler
 
   namelist /coupler_nml/ current_date, calendar, force_date_from_namelist,         &
                          months, days, hours, minutes, seconds, dt_cpld, dt_atmos, &
@@ -236,7 +238,7 @@ module full_coupler_mod
                          check_stocks, restart_interval, do_debug, do_chksum,      &
                          use_hyper_thread, concurrent_ice, slow_ice_with_ocean,    &
                          do_endpoint_chksum, combined_ice_and_ocean,               &
-                         calve_ice_shelf_bergs
+                         calve_ice_shelf_bergs, ice_sheet_enabled
 
   !> coupler_clock_type derived type consist of all clock ids that will be set and used
   !! in full coupler_main.
@@ -410,6 +412,8 @@ contains
                             ! atmosphere-ocean gas and tracer fluxes.
 
     integer :: num_ice_bc_restart, num_ocn_bc_restart
+    real :: IS_adot_int_land !< The total surface mass flux to the ice sheet from land, area-integrated over the
+                             !! the land grid (kg s-1)
 !-----------------------------------------------------------------------
 
     outunit = fms_mpp_stdout()
@@ -936,7 +940,9 @@ contains
 
       call fms_mpp_clock_begin(coupler_clocks%land_model_init)
       call land_model_init( Atmos_land_boundary, Land, Time_init, Time, &
-                            Time_step_atmos, Time_step_cpld )
+                            Time_step_atmos, Time_step_cpld, &
+                            ice_sheet_calving=calve_ice_shelf_bergs, &
+                            ice_sheet_enabled=ice_sheet_enabled )
       call fms_mpp_clock_end(coupler_clocks%land_model_init)
 
       if (fms_mpp_pe().EQ.fms_mpp_root_pe()) then
@@ -969,7 +975,8 @@ contains
       call ice_model_init(Ice, Time_init, Time, Time_step_atmos, &
                            Time_step_cpld, Verona_coupler=.false., &
                           concurrent_ice=concurrent_ice, &
-                          gas_fluxes=gas_fluxes, gas_fields_ocn=gas_fields_ocn )
+                          gas_fluxes=gas_fluxes, gas_fields_ocn=gas_fields_ocn, &
+                          ice_sheet_enabled=ice_sheet_enabled)
       call fms_mpp_clock_end(coupler_clocks%ice_model_init)
 
       ! This must be called using the union of the ice PE_lists.
@@ -1059,14 +1066,15 @@ contains
     if(do_flux) call flux_exchange_init ( Time, Atm, Land, Ice, Ocean, Ocean_state,&
              atmos_ice_boundary, land_ice_atmos_boundary, &
              land_ice_boundary, ice_ocean_boundary, ocean_ice_boundary, &
-         do_ocean, slow_ice_ocean_pelist, calve_ice_shelf_bergs, dt_atmos=dt_atmos, dt_cpld=dt_cpld)
+             do_ocean, slow_ice_ocean_pelist, dt_atmos=dt_atmos, dt_cpld=dt_cpld, &
+             calve_ice_shelf_bergs=calve_ice_shelf_bergs, ice_sheet_enabled=ice_sheet_enabled)
     call fms_mpp_set_current_pelist(ensemble_pelist(ensemble_id,:))
     call fms_mpp_clock_end(coupler_clocks%flux_exchange_init)
 
     call fms_mpp_set_current_pelist()
     if (fms_mpp_pe().EQ.fms_mpp_root_pe()) then
       call DATE_AND_TIME(walldate, walltime, wallzone, wallvalues)
-      write(errunit,*) 'Finsihed initializing flux_exchange at '&
+      write(errunit,*) 'Finished initializing flux_exchange at '&
                        //trim(walldate)//' '//trim(walltime)
     endif
 
@@ -1117,6 +1125,20 @@ contains
     endif !< ( Ocean%is_ocean_pe )
 
     call fms_mpp_set_current_pelist()
+
+    ! The global scalar Ice%IS_adot_int_land is restarted on the slow_ice PEs. It will be reassigned
+    ! directly to Ice_ocean_boundary%IS_adot_int_land, so needs to be broadcasted to the
+    ! slow_ice_ocean_pelist
+    IS_adot_int_land=0.
+    if (fms_mpp_pe().EQ.Ice%slow_pelist(1)) IS_adot_int_land = Ice%IS_adot_int_land
+
+    if (Ice%slow_ice_PE .or. Ocean%is_ocean_pe) then
+      if (.not. any(slow_ice_ocean_pelist(:) .eq. fms_mpp_pe())) &
+        call fms_mpp_error(FATAL, 'There is a slow ice or Ocean PE that is not in the slow_ice_ocean_pelist!')
+      call fms_mpp_broadcast(IS_adot_int_land, Ice%slow_pelist(1), pelist=slow_ice_ocean_pelist)
+    endif
+
+    Ice%IS_adot_int_land = IS_adot_int_land
 
 !-----------------------------------------------------------------------
 !---- open and close dummy file in restart dir to check if dir exists --
@@ -1817,9 +1839,9 @@ contains
     type(ocean_state_type), pointer, intent(inout) :: Ocean_state    !< Ocean_state
     type(coupler_clock_type), intent(inout)        :: coupler_clocks !< coupler_clocks
 
+    call fms_mpp_set_current_pelist()
     call fms_mpp_clock_begin(coupler_clocks%flux_check_stocks)
     if (check_stocks*((nc-1)/check_stocks) == nc-1 .AND. nc > 1) then
-      call fms_mpp_set_current_pelist()
       call flux_check_stocks(Time=Time, Atm=Atm, Lnd=Land, Ice=Ice, Ocn_state=Ocean_state)
     endif
     call fms_mpp_clock_end(coupler_clocks%flux_check_stocks)
@@ -2118,13 +2140,14 @@ contains
 
   !> This subroutine calls update_land_model_fast.  Clocks are set for runtime statistics.  Chksums
   !! and memory usage are computed if do_chksum and do_debug are .True.
-  subroutine coupler_update_land_model_fast(Land, Atmos_land_boundary, atm_pelist, current_timestep, &
+  subroutine coupler_update_land_model_fast(Land, Atmos_land_boundary, atm_pelist, na, current_timestep, &
                                             coupler_chksum_obj, coupler_clocks)
 
     implicit none
     type(land_data_type),           intent(inout) :: Land !< Land
     type(atmos_land_boundary_type), intent(inout) :: Atmos_land_boundary !< Atmos_land_boundary
     integer, dimension(:), intent(in) :: atm_pelist !< Atm%pelist to reset the pelist to Atm%pelist
+    integer,                   intent(in) :: na     !< current atm fast iteration
     integer,                   intent(in) :: current_timestep       !< current timestep
     type(coupler_chksum_type), intent(in) :: coupler_chksum_obj     !< points to component types
     type(coupler_clock_type),  intent(inout) :: coupler_clocks      !< coupler_clocks
@@ -2132,7 +2155,7 @@ contains
     call fms_mpp_clock_begin(coupler_clocks%update_land_model_fast) !< current pelist=Atm%pelist
     if (land_npes .NE. atmos_npes) call fms_mpp_set_current_pelist(Land%pelist)
 
-    call update_land_model_fast( Atmos_land_boundary, Land )
+    call update_land_model_fast( Atmos_land_boundary, Land, na)
 
     if (land_npes .NE. atmos_npes) call fms_mpp_set_current_pelist(atm_pelist)
     call fms_mpp_clock_end(coupler_clocks%update_land_model_fast)
@@ -2294,6 +2317,55 @@ contains
     if (do_chksum) call coupler_chksum_obj%get_atmos_ice_land_chksums('fluxlnd2ice+', current_timestep)
 
   end subroutine coupler_flux_land_to_ice
+
+  !> This subroutine broadcasts the land-grid-area-integrated ice-sheet surface mass flux from the land PE
+  !! list to the slow_ice_ocean PE list. Subtracting this value from the ocean-grid-area-integrated
+  !! surface mass flux gives the total stock of mass flux that was not exchanged between the two grids,
+  !! i.e. the flux into any gap ("hole") in spatial coverage for the ocean grid (often at the S. Pole)
+  subroutine coupler_adot_int_land_to_ice(Land, Ocean, Ice, Atm, Ice_ocean_boundary,slow_ice_ocean_pelist)
+    implicit none
+    type(land_data_type), intent(in) :: Land !< Land
+    type(ocean_public_type), intent(in) :: Ocean !< Ocean
+    type(ice_data_type),  intent(inout) :: Ice  !< Ice
+    type(atmos_data_type),         intent(in) :: Atm  !< Atm
+    type(Ice_ocean_boundary_type),   intent(inout) :: Ice_ocean_boundary  !< Ice_ocean_boundary
+    integer, dimension(:),   intent(in) :: slow_ice_ocean_pelist !< slow_ice_oean_pelist
+    real :: IS_adot_int_land ! The area-integrated ice-sheet surface mass flux in the land model
+    integer, save, allocatable, dimension(:) :: land1_slow_ice_ocean_pelist
+
+    if (.not. allocated(land1_slow_ice_ocean_pelist)) then
+      if (any(slow_ice_ocean_pelist(:) .eq. Land%pelist(1))) then
+        allocate(land1_slow_ice_ocean_pelist(size(slow_ice_ocean_pelist)))
+        land1_slow_ice_ocean_pelist=slow_ice_ocean_pelist
+      else
+        allocate(land1_slow_ice_ocean_pelist(size(slow_ice_ocean_pelist)+1))
+        land1_slow_ice_ocean_pelist(1)=Land%pelist(1)
+        land1_slow_ice_ocean_pelist(2:size(land1_slow_ice_ocean_pelist))=slow_ice_ocean_pelist
+      endif
+    endif
+
+    call fms_mpp_set_current_pelist()
+    if (land%pe) IS_adot_int_land = Land%IS_adot_int
+
+    if ((fms_mpp_pe() .eq. Land%pelist(1)) .or. Ice%slow_ice_PE .or. Ocean%is_ocean_pe) &
+      call fms_mpp_broadcast(IS_adot_int_land, Land%pelist(1), pelist=land1_slow_ice_ocean_pelist)
+
+    if (Ice%slow_ice_PE .or. Ocean%is_ocean_pe) Ice%IS_adot_int_land=IS_adot_int_land
+
+    ! Reset current PElists
+    if (concurrent_ice) then
+      if (Ocean%is_ocean_pe) call fms_mpp_set_current_pelist(Ocean%pelist)
+    else
+      if (Ice%pe) then
+        if (Ice%slow_ice_pe) call fms_mpp_set_current_pelist(Ice%slow_pelist)
+        if (.not.Ice%shared_slow_fast_PEs) call fms_mpp_set_current_pelist(Ice%pelist)
+        ! if (concurrent_ice .and. Ice%slow_ice_pe .and. calve_ice_shelf_bergs) &
+          ! call fms_mpp_set_current_pelist(Ice%slow_pelist)
+        if (Ice%fast_ice_pe .and. .not.Ice%shared_slow_fast_PEs) call fms_mpp_set_current_pelist(Ice%fast_pelist)
+      endif
+    endif
+
+  end subroutine coupler_adot_int_land_to_ice
 
   !> This subroutine calls ice_model_fast_cleanup and unpack_land_ice_boundary
   subroutine coupler_unpack_land_ice_boundary(Ice, Land_ice_boundary, coupler_clocks)
