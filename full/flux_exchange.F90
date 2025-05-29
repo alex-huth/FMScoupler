@@ -678,7 +678,7 @@ contains
     integer, dimension(:),             intent(in)    :: slow_ice_ocean_pelist
     integer, optional,                 intent(in)    :: dt_atmos !< Atmosphere time step in seconds
     integer, optional,                 intent(in)    :: dt_cpld !< Coupled time step in seconds
-    character(len=*), intent(in) :: calve_ice_shelf_bergs !< If 'POINT', convert ice shelf flux through
+    character(len=*), optional, intent(in) :: calve_ice_shelf_bergs !< If 'POINT', convert ice shelf flux through
                                               !! a static ice shelf front into point-particle icebergs. If 'BONDED',
                                               !! convert ice shelf into bonded-particle tabular bergs where tabular
                                               !! calving mask exceeds zero. If 'MIXED', use 'POINT' for N Hemisphere
@@ -747,8 +747,10 @@ contains
     do_IS=.false.
     if (present(ice_sheet_enabled)) do_IS=ice_sheet_enabled
 
-    do_calve=.false.
-    if (present(calve_ice_shelf_bergs)) do_calve=calve_ice_shelf_bergs
+    do_calve = .false.
+    if (PRESENT(calve_ice_shelf_bergs)) then
+      if (calve_ice_shelf_bergs=='POINT' .or. calve_ice_shelf_bergs=='MIXED') do_calve = .true.
+    endif
 
     if( Atm%pe )then
        call fms_mpp_set_current_pelist(Atm%pelist)

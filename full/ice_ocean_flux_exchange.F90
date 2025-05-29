@@ -105,7 +105,7 @@ contains
     if (trim(calve_ice_shelf_bergs) == 'BONDED' .or. trim(calve_ice_shelf_bergs) == 'MIXED') then
       allocate( ocean_ice_boundary%tabular_calve_mask(is:ie,js:je) )
       allocate( ocean_ice_boundary%mass_shelf(is:ie,js:je) )
-      allocate( ocean_ice_boundary%area_shelf_h(is:ie,js:je) )
+      allocate( ocean_ice_boundary%frac_shelf(is:ie,js:je) )
     endif
     ! initialize boundary fields for override experiments (mjh)
     ocean_ice_boundary%u=0.0
@@ -118,7 +118,7 @@ contains
     ocean_ice_boundary%calving_hflx=0.0
     if (associated(ocean_ice_boundary%tabular_calve_mask)) ocean_ice_boundary%tabular_calve_mask=0
     if (associated(ocean_ice_boundary%mass_shelf)) ocean_ice_boundary%mass_shelf=0.0
-    if (associated(ocean_ice_boundary%area_shelf_h)) ocean_ice_boundary%area_shelf_h=0.0
+    if (associated(ocean_ice_boundary%frac_shelf)) ocean_ice_boundary%frac_shelf=0.0
 
     ! allocate fields for extra tracers in ocean_ice_boundary
     if (.not.fms_coupler_type_initialized(ocean_ice_boundary%fields)) &
@@ -431,7 +431,7 @@ contains
   !!        calving_hflx = heat flux associated with ice-sheet calving to point icebergs (W/m2)
   !!        tabular_calve_mask = mask for calving of tabular bonded bergs [nondim]
   !!        mass_shelf = the ice shelf mass field per ice shelf area, used for calving of tabular bonded bergs [kg m-2]
-  !!        area_shelf_h = the area in the grid cell covered by the ice shelf, for calving tabular bonded bergs [m2]
+  !!        frac_shelf = the cell fraction covered by the ice shelf, for calving tabular bonded bergs [nondim]
   !! </pre>
   !!
   !! \throw FATAL, "Ocean_Ice_Boundary%xtype must be DIRECT or REDIST."
@@ -458,6 +458,11 @@ contains
        if( ASSOCIATED(Ocean_Ice_Boundary%t) )Ocean_Ice_Boundary%t = Ocean%t_surf
        if( ASSOCIATED(Ocean_Ice_Boundary%s) )Ocean_Ice_Boundary%s = Ocean%s_surf
        if( ASSOCIATED(Ocean_Ice_Boundary%sea_level) )Ocean_Ice_Boundary%sea_level = Ocean%sea_lev
+       if( ASSOCIATED(Ocean_Ice_Boundary%tabular_calve_mask) ) &
+         Ocean_Ice_Boundary%tabular_calve_mask = Ocean%tabular_calve_mask
+       if( ASSOCIATED(Ocean_Ice_Boundary%frac_shelf) ) &
+         Ocean_Ice_Boundary%frac_shelf = Ocean%frac_shelf
+
        if( ASSOCIATED(Ocean_Ice_Boundary%frazil) ) then
           if(do_area_weighted_flux) then
              Ocean_Ice_Boundary%frazil = Ocean%frazil * Ocean%area
@@ -484,21 +489,12 @@ contains
           endif
        endif
 
-       if( ASSOCIATED(Ocean_Ice_Boundary%tabular_calve_mask) )Ocean_Ice_Boundary%tabular_calve_mask = Ocean%tabular_calve_mask
        if( ASSOCIATED(Ocean_Ice_Boundary%mass_shelf) ) then
           if(do_area_weighted_flux) then
              Ocean_Ice_Boundary%mass_shelf = Ocean%mass_shelf * Ocean%area
              call divide_by_area(data=Ocean_Ice_Boundary%mass_shelf, area=Ice%area)
            else
              Ocean_Ice_Boundary%mass_shelf = Ocean%mass_shelf
-          endif
-       endif
-       if( ASSOCIATED(Ocean_Ice_Boundary%area_shelf_h) ) then
-          if(do_area_weighted_flux) then
-             Ocean_Ice_Boundary%area_shelf_h = Ocean%area_shelf_h * Ocean%area
-             call divide_by_area(data=Ocean_Ice_Boundary%area_shelf_h, area=Ice%area)
-          else
-             Ocean_Ice_Boundary%area_shelf_h = Ocean%area_shelf_h
           endif
        endif
 
@@ -519,6 +515,13 @@ contains
        if( ASSOCIATED(Ocean_Ice_Boundary%sea_level) )             &
             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%sea_lev, Ice%slow_Domain_NH, &
                                               Ocean_Ice_Boundary%sea_level)
+
+       if( ASSOCIATED(Ocean_Ice_Boundary%tabular_calve_mask) )             &
+            call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%tabular_calve_mask, Ice%slow_Domain_NH, &
+                                              Ocean_Ice_Boundary%tabular_calve_mask)
+       if( ASSOCIATED(Ocean_Ice_Boundary%frac_shelf) )             &
+            call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%frac_shelf, Ice%slow_Domain_NH, &
+                                              Ocean_Ice_Boundary%frac_shelf)
 
        if( ASSOCIATED(Ocean_Ice_Boundary%frazil) ) then
           if(do_area_weighted_flux) then
@@ -566,35 +569,20 @@ contains
                 Ocean_Ice_Boundary%calving_hflx)
           endif
        endif
-
-       if( ASSOCIATED(Ocean_Ice_Boundary%tabular_calve_mask) )            &
-         call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%tabular_calve_mask, Ice%slow_Domain_NH, Ocean_Ice_Boundary%tabular_calve_mask)
        if( ASSOCIATED(Ocean_Ice_Boundary%mass_shelf) ) then
           if(do_area_weighted_flux) then
              if (Ocean%is_ocean_pe) then
                allocate(tmp(size(Ocean%area,1), size(Ocean%area,2)))
                tmp(:,:) = Ocean%mass_shelf(:,:) * Ocean%area(:,:)
              endif
-             call fms_mpp_domains_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, Ocean_Ice_Boundary%mass_shelf)
+             call fms_mpp_domains_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, &
+                Ocean_Ice_Boundary%mass_shelf)
              if (Ice%slow_ice_pe) &
                call divide_by_area(data=Ocean_Ice_Boundary%mass_shelf, area=Ice%area)
              if (Ocean%is_ocean_pe) deallocate(tmp)
           else
-             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%mass_shelf, Ice%slow_Domain_NH, Ocean_Ice_Boundary%mass_shelf)
-          endif
-       endif
-       if( ASSOCIATED(Ocean_Ice_Boundary%area_shelf_h) ) then
-          if(do_area_weighted_flux) then
-             if (Ocean%is_ocean_pe) then
-               allocate(tmp(size(Ocean%area,1), size(Ocean%area,2)))
-               tmp(:,:) = Ocean%area_shelf_h(:,:) * Ocean%area(:,:)
-             endif
-             call fms_mpp_domains_redistribute( Ocean%Domain, tmp, Ice%slow_Domain_NH, Ocean_Ice_Boundary%area_shelf_h)
-             if (Ice%slow_ice_pe) &
-               call divide_by_area(data=Ocean_Ice_Boundary%area_shelf_h, area=Ice%area)
-             if (Ocean%is_ocean_pe) deallocate(tmp)
-          else
-             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%area_shelf_h, Ice%slow_Domain_NH, Ocean_Ice_Boundary%area_shelf_h)
+             call fms_mpp_domains_redistribute(Ocean%Domain, Ocean%mass_shelf, Ice%slow_Domain_NH, &
+                Ocean_Ice_Boundary%mass_shelf)
           endif
        endif
 
