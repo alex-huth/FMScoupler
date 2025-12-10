@@ -6,6 +6,13 @@ and this project uses `yyyy.rr[.pp]`, where `yyyy` is the year a patch is releas
 `rr` is a sequential release number (starting from `01`), and an optional two-digit
 sequential patch number (starting from `01`).
 
+## [2025.04] - 2025-09-29
+
+### Tag Commit Hashes
+2025.04-beta2 37c09ac8673ac19d3c37d8f6115ed638fb63a69a
+2025.04 beta1 37c09ac8673ac19d3c37d8f6115ed638fb63a69a
+2025.04-alpha1 37c09ac8673ac19d3c37d8f6115ed638fb63a69a
+
 ## [2025.03] - 2025-06-24
 ## Change
 - updated aliases for functions missed in the libfms update (#158)
