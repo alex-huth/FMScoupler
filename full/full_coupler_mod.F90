@@ -86,6 +86,8 @@ module full_coupler_mod
 
   use atmos_tracer_driver_mod, only: atmos_tracer_driver_gather_data
 
+  use gex_mod,                 only: gex_init
+
   use iso_fortran_env
 
   implicit none
@@ -432,7 +434,7 @@ contains
 !----- read namelist -------
 
     read (fms_mpp_input_nml_file, coupler_nml, iostat=io)
-    ierr = check_nml_error (io, 'coupler_nml')
+    ierr = fms_check_nml_error (io, 'coupler_nml')
 
     !----- read date and calendar type from restart file -----
     if (fms2_io_file_exists('INPUT/coupler.res')) then
@@ -450,7 +452,7 @@ contains
     if ( force_date_from_namelist ) then
 
       if ( sum(current_date) <= 0 ) then
-        call error_mesg ('program coupler',  &
+        call fms_error_mesg ('program coupler',  &
              'no namelist value for base_date or current_date', FATAL)
       else
         date = current_date
@@ -860,19 +862,19 @@ contains
 
 !----- initial time cannot be greater than current time -------
 
-    if ( Time_init > Time ) call error_mesg ('program coupler',  &
+    if ( Time_init > Time ) call fms_error_mesg ('program coupler',  &
          'initial time is greater than current time', FATAL)
 
 !----- make sure run length is a multiple of ocean time step ------
 
     if ( num_cpld_calls * Time_step_cpld  /= Run_length )  &
-      call error_mesg ('program coupler',  &
+      call fms_error_mesg ('program coupler',  &
          'run length must be multiple of coupled time step', FATAL)
 
 ! ---- make sure cpld time step is a multiple of atmos time step ----
 
     if ( num_atmos_calls * Time_step_atmos /= Time_step_cpld )  &
-      call error_mesg ('program coupler',   &
+      call fms_error_mesg ('program coupler',   &
          'cpld time step is not a multiple of the atmos time step', FATAL)
 
 !
@@ -896,7 +898,8 @@ contains
                        //trim(walldate)//' '//trim(walltime)
     endif
 
-
+!   Initialize atm/land exchange (not for tracers)
+    call gex_init()
 
 !-----------------------------------------------------------------------
 !------ initialize component models ------
@@ -1311,7 +1314,7 @@ contains
 
 !----- check time versus expected ending time ----
 
-    if (Time_current /= Time_end) call error_mesg ('program coupler',  &
+    if (Time_current /= Time_end) call fms_error_mesg ('program coupler',  &
          'final time does not match expected ending time', WARNING)
 
 !-----------------------------------------------------------------------
